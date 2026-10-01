@@ -2,6 +2,8 @@ package core
 
 import (
 	"context"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -303,5 +305,46 @@ func TestSettingsPrecedence(t *testing.T) {
 	c.SetModel(conv, "override")
 	if s := c.Settings(conv); s.Model != "override" {
 		t.Errorf("conversation override lost: %+v", s)
+	}
+}
+
+func TestUndoRestoresLastTurn(t *testing.T) {
+	fa := &fakeAgent{}
+	c, ui := setup(t, fa, nil)
+	dir := c.Settings(conv).Cwd
+	gitRun := func(args ...string) {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	gitRun("init", "-q")
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("before\n"), 0o644)
+	gitRun("add", ".")
+	gitRun("commit", "-qm", "init")
+
+	// The agent edits the file during its turn.
+	fa.block = make(chan struct{})
+	c.Submit(conv, text("change it"))
+	time.Sleep(100 * time.Millisecond)
+	os.WriteFile(filepath.Join(dir, "f.txt"), []byte("after\n"), 0o644)
+	close(fa.block)
+	waitDone(t, ui)
+
+	d, err := c.Diff(context.Background(), conv, false)
+	if err != nil || !strings.Contains(d, "+after") {
+		t.Fatalf("diff = %q, %v", d, err)
+	}
+	cp, err := c.Undo(context.Background(), conv)
+	if err != nil || cp.Prompt != "change it" {
+		t.Fatalf("undo: %+v %v", cp, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "f.txt")); string(b) != "before\n" {
+		t.Errorf("file = %q", b)
+	}
+	if _, err := c.Undo(context.Background(), conv); err == nil {
+		t.Error("second undo should have nothing to undo")
 	}
 }
