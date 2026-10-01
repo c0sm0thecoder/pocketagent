@@ -25,6 +25,9 @@ type Config struct {
 	Budget          Budget             `yaml:"budget"`
 	Output          Output             `yaml:"output"`
 	Checkpoints     *bool              `yaml:"checkpoints"`
+	// BridgeHost is how agents reach pocketagent's MCP server. Set it to
+	// host.docker.internal when agents run in containers.
+	BridgeHost string `yaml:"bridge_host"`
 
 	// Home is the directory holding state, logs and uploads. Not read from YAML.
 	Home string `yaml:"-"`

@@ -106,7 +106,7 @@ func run(cfgPath string) error {
 	if err != nil {
 		return err
 	}
-	br, err := bridge.Start(os.Getenv("POCKETAGENT_BRIDGE_HOST"))
+	br, err := bridge.Start(cfg.BridgeHost)
 	if err != nil {
 		return fmt.Errorf("start mcp bridge: %w", err)
 	}

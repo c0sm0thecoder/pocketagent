@@ -95,3 +95,5 @@ output:
   file_threshold: 8000               # replies longer than this are sent as a .md file
 
 checkpoints: true                    # git snapshot before each turn, for /diff and /undo
+
+# bridge_host: host.docker.internal  # only when agents run in containers (docs/sandbox.md)
