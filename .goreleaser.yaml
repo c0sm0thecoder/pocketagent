@@ -26,3 +26,22 @@ release:
   github:
     owner: c0sm0thecoder
     name: pocketagent
+
+# Homebrew: publishes a cask to c0sm0thecoder/homebrew-tap when the
+# HOMEBREW_TAP_TOKEN secret (a token with write access to that repo) is set.
+homebrew_casks:
+  - name: pocketagent
+    binaries: [pocketagent]
+    repository:
+      owner: c0sm0thecoder
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    homepage: https://github.com/c0sm0thecoder/pocketagent
+    description: Drive coding agents (Claude Code, Codex, Gemini, Kiro, Aider...) from Telegram
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/pocketagent"]
+          end
