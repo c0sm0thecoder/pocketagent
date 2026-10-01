@@ -15,11 +15,55 @@ defaults:
 auto_allow: [read, search, think]
 approval_timeout: 10m
 
+# Three agent types:
+#   claude:  the Claude Code CLI driven directly (fastest, reports cost)
+#   acp:     any Agent Client Protocol agent; approvals, images and models come
+#            through the protocol. Models are discovered from the agent too.
+#   command: any CLI that takes a prompt and prints a reply.
+# Optional on every agent: model (default), models (picker list), env, wrap.
 agents:
   claude:
-    type: claude                     # native Claude Code CLI
+    type: claude
     command: claude
     models: [opus, sonnet, haiku]
+
+  codex:
+    type: acp
+    command: [npx, -y, "@zed-industries/codex-acp"]
+
+  # gemini:
+  #   type: acp
+  #   command: [gemini, --acp]
+  # kiro:
+  #   type: acp
+  #   command: [kiro-cli, acp]
+  # goose:
+  #   type: acp
+  #   command: [goose, acp]
+  # opencode:
+  #   type: acp
+  #   command: [opencode, acp]
+  # copilot:
+  #   type: acp
+  #   command: [copilot, --acp, --stdio]
+  # claude-acp:                      # Claude Code through ACP instead of natively
+  #   type: acp
+  #   command: [npx, -y, "@agentclientprotocol/claude-agent-acp"]
+
+  # aider:
+  #   type: command
+  #   command: [aider, --message, "{prompt}", --yes-always, --no-pretty, --no-stream]
+  #   model_args: [--model, "{model}"]   # added when a model is chosen
+  #   image_args: ["{path}"]             # added once per attached image
+  #   models: [sonnet, gpt-5, deepseek]
+  #   timeout: 30m
+  # my-script:
+  #   type: command
+  #   command: [./ask.sh]
+  #   stdin: true                        # prompt on stdin instead of {prompt}
+
+  # Sandbox any agent by wrapping its command, e.g. in Docker (see docs/sandbox.md):
+  #   wrap: [docker, run, --rm, -i, -v, "{cwd}:{cwd}", -w, "{cwd}", my-agent-image]
 
 # Named workspaces, switchable with /project.
 projects:
