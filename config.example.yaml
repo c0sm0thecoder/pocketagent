@@ -1,0 +1,53 @@
+# pocketagent config. Copy to ~/.pocketagent/config.yaml (or run `pocketagent init`).
+# ${VAR} is replaced with the environment variable VAR, so secrets can stay out of this file.
+
+telegram:
+  token: ${TELEGRAM_BOT_TOKEN}       # from @BotFather
+  allowed_users: [123456789]         # numeric user ids; message @userinfobot to get yours
+
+defaults:
+  agent: claude
+  cwd: ~/projects
+  mode: ask                          # ask | edits | plan | yolo
+
+# Tool kinds approved without asking (in every mode except when the agent
+# itself prompts): read, search, think, fetch, edit, execute, delete, move, other
+auto_allow: [read, search, think]
+approval_timeout: 10m
+
+agents:
+  claude:
+    type: claude                     # native Claude Code CLI
+    command: claude
+    models: [opus, sonnet, haiku]
+
+# Named workspaces, switchable with /project.
+projects:
+  pocketagent:
+    cwd: ~/projects/pocketagent
+  # api: { cwd: ~/work/api, agent: codex, model: gpt-5, mode: edits }
+
+transcriber:
+  type: whisper-cpp                  # whisper-cpp | openai | command | none
+  model: ~/.pocketagent/models/ggml-small.bin
+  language: auto
+  # OpenAI-compatible (OpenAI, Groq, a local faster-whisper server, ...):
+  # type: openai
+  # base_url: https://api.groq.com/openai/v1
+  # api_key: ${GROQ_API_KEY}
+  # model: whisper-large-v3-turbo
+
+tts:
+  type: none                         # say (macOS) | openai | command | none
+  # type: openai
+  # api_key: ${OPENAI_API_KEY}
+  # model: gpt-4o-mini-tts
+  # voice: alloy
+
+budget:
+  daily_usd: 0                       # per user; 0 = unlimited
+
+output:
+  file_threshold: 8000               # replies longer than this are sent as a .md file
+
+checkpoints: true                    # git snapshot before each turn, for /diff and /undo

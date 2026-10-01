@@ -1,2 +1,4 @@
 .env
+/pocketagent
 /claude-telegram
+/dist/

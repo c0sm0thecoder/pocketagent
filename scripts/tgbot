@@ -4,7 +4,7 @@ set -euo pipefail
 
 PROJECT="$HOME/projects/claude-telegram"
 SESSION="tg"
-LOG="$HOME/.claude-telegram/bot.log"
+LOG="$HOME/.pocketagent/pocketagent.log"
 
 running() { tmux has-session -t "$SESSION" 2>/dev/null; }
 
@@ -15,9 +15,9 @@ start() {
   fi
   cd "$PROJECT"
   echo "building..."
-  go build -o claude-telegram .
+  go build -o pocketagent ./cmd/pocketagent
   mkdir -p "$(dirname "$LOG")"
-  tmux new-session -d -s "$SESSION" -c "$PROJECT" "./claude-telegram 2>&1 | tee -a '$LOG'"
+  tmux new-session -d -s "$SESSION" -c "$PROJECT" "./pocketagent run 2>&1 | tee -a '$LOG'"
   sleep 2
   if running; then
     echo "started"

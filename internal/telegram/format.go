@@ -1,4 +1,4 @@
-package main
+package telegram
 
 import (
 	"html"
@@ -114,35 +114,4 @@ func inlineToHTML(line string) string {
 		line = strings.Replace(line, "\x00"+string(rune('A'+i))+"\x00", "<code>"+html.EscapeString(c)+"</code>", 1)
 	}
 	return line
-}
-
-// toolSummary renders a one-line description of a tool call.
-func toolSummary(name string, input map[string]any) string {
-	str := func(k string) string { s, _ := input[k].(string); return s }
-	var detail string
-	switch name {
-	case "Bash":
-		detail = str("command")
-	case "Read", "Write", "Edit", "NotebookEdit":
-		detail = str("file_path")
-		if detail == "" {
-			detail = str("notebook_path")
-		}
-	case "Glob", "Grep":
-		detail = str("pattern")
-	case "WebFetch":
-		detail = str("url")
-	case "WebSearch":
-		detail = str("query")
-	case "Task", "Agent":
-		detail = str("description")
-	}
-	detail = strings.ReplaceAll(detail, "\n", " ")
-	if len(detail) > 120 {
-		detail = detail[:117] + "..."
-	}
-	if detail == "" {
-		return name
-	}
-	return name + ": " + detail
 }

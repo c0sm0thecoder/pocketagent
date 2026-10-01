@@ -1,14 +1,14 @@
-module github.com/kamalaghazada/claude-telegram
+module github.com/c0sm0thecoder/pocketagent
 
 go 1.25.8
 
 require (
 	github.com/go-telegram/bot v1.27.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
+	go.yaml.in/yaml/v3 v3.0.5
 )
 
 require (
-	github.com/coder/acp-go-sdk v0.13.5 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
