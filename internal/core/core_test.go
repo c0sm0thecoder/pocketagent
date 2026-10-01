@@ -348,3 +348,18 @@ func TestUndoRestoresLastTurn(t *testing.T) {
 		t.Error("second undo should have nothing to undo")
 	}
 }
+
+// /stop right after a message is accepted must still cancel the run.
+func TestStopImmediatelyAfterSubmit(t *testing.T) {
+	for range 50 {
+		fa := &fakeAgent{block: make(chan struct{})} // never released
+		c, ui := setup(t, fa, nil)
+		c.Submit(conv, text("a"))
+		if stopped, _ := c.Stop(conv); !stopped {
+			t.Fatal("not stopped")
+		}
+		if s := waitDone(t, ui); !strings.Contains(s, "Stopped") {
+			t.Fatalf("summary = %q", s)
+		}
+	}
+}

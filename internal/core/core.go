@@ -75,7 +75,8 @@ type pending struct {
 
 type runtime struct {
 	running bool
-	cancel  context.CancelFunc
+	cancel  context.CancelFunc // the current turn's; nil between turns
+	stopReq bool               // /stop arrived before the turn registered cancel
 	queue   []Input
 }
 
@@ -372,6 +373,7 @@ func (c *Core) loop(conv Conv, rt *runtime, in Input) {
 		}
 		in = rt.queue[0]
 		rt.queue = rt.queue[1:]
+		rt.cancel = nil
 		c.mu.Unlock()
 	}
 }
@@ -388,11 +390,23 @@ func (c *Core) Stop(conv Conv) (stopped bool, dropped int) {
 	rt.queue = nil
 	if rt.cancel != nil {
 		rt.cancel()
+	} else {
+		rt.stopReq = true // the turn is starting; it cancels itself on registration
 	}
 	return true, dropped
 }
 
 func (c *Core) turn(conv Conv, rt *runtime, in Input) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	c.mu.Lock()
+	rt.cancel = cancel
+	if rt.stopReq {
+		rt.stopReq = false
+		cancel()
+	}
+	c.mu.Unlock()
+
 	s := c.Settings(conv)
 	user := strconv.FormatInt(in.User, 10)
 	if limit := c.cfg.Budget.DailyUSD; limit > 0 {
@@ -408,12 +422,6 @@ func (c *Core) turn(conv Conv, rt *runtime, in Input) {
 		c.ui.Notice(conv, s.Agent+" has no plan mode; running in ask mode.")
 		mode = agent.ModeAsk
 	}
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	c.mu.Lock()
-	rt.cancel = cancel
-	c.mu.Unlock()
 
 	if c.cfg.CheckpointsEnabled() && mode != agent.ModePlan {
 		if commit, err := gitcp.Snapshot(ctx, s.Cwd); err == nil {
