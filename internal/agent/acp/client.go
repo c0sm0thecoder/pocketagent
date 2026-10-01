@@ -48,6 +48,12 @@ func (c *client) setSuppress(on bool) {
 	c.mu.Unlock()
 }
 
+func (c *client) resetCost() {
+	c.mu.Lock()
+	c.costUSD = 0
+	c.mu.Unlock()
+}
+
 func (c *client) cost() float64 {
 	c.mu.Lock()
 	defer c.mu.Unlock()

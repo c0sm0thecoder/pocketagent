@@ -290,6 +290,8 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 	if err != nil {
 		return agent.Result{}, err
 	}
+	// Agents report a running session total; measure this turn's share.
+	costAtStart := cl.cost()
 	a.applyMode(ctx, p, sid, req.Mode)
 	if err := a.applyModel(ctx, p, sid, req.Model); err != nil {
 		h.Text("_" + err.Error() + "_")
@@ -337,7 +339,7 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 		return agent.Result{SessionID: sid}, ctx.Err()
 	}
 	cl.flush()
-	res := agent.Result{SessionID: sid, SessionCostUSD: cl.cost()}
+	res := agent.Result{SessionID: sid, CostUSD: max(cl.cost()-costAtStart, 0)}
 	if r.err != nil {
 		return res, a.explain("prompt", r.err, p)
 	}
@@ -400,6 +402,7 @@ func (a *Agent) session(ctx context.Context, p *proc, req agent.Request, h agent
 	}
 	id := string(resp.SessionId)
 	p.setSession(id, resp.ConfigOptions, resp.Modes)
+	p.client.resetCost() // the process may have served another session before
 	h.Session(id)
 	return id, nil
 }

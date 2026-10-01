@@ -67,7 +67,7 @@ func TestACPAgent(t *testing.T) {
 			asked = append(asked, string(p.Kind)+" "+p.Tool+" | "+strings.ReplaceAll(p.Detail, "\n", " "))
 		}
 		t.Logf("allow=%v tools=%v asked=%v text=%q stop=%s cost=$%.4f models=%v",
-			allow, h.tools, asked, h.text.String(), res.StopReason, res.SessionCostUSD, a.Models("t"))
+			allow, h.tools, asked, h.text.String(), res.StopReason, res.CostUSD, a.Models("t"))
 		return h, res
 	}
 
