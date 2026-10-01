@@ -41,9 +41,11 @@ type album struct {
 	text   []string
 }
 
-func New(cfg *config.Config, c *core.Core) (*Bot, error) {
+// New creates the bot. Extra options are passed to the Telegram client
+// (tests use them to point it at a fake API server).
+func New(cfg *config.Config, c *core.Core, opts ...bot.Option) (*Bot, error) {
 	b := &Bot{core: c, cfg: cfg, albums: map[string]*album{}, approvals: map[string][]agent.Option{}}
-	tg, err := bot.New(cfg.Telegram.Token, bot.WithDefaultHandler(b.handleUpdate))
+	tg, err := bot.New(cfg.Telegram.Token, append([]bot.Option{bot.WithDefaultHandler(b.handleUpdate)}, opts...)...)
 	if err != nil {
 		return nil, err
 	}
