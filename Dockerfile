@@ -16,7 +16,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN npm install -g @anthropic-ai/claude-code @agentclientprotocol/claude-agent-acp \
       @openai/codex @zed-industries/codex-acp @google/gemini-cli
 COPY --from=build /pocketagent /usr/local/bin/pocketagent
-RUN useradd -m -u 1000 agent
+# node images already have uid 1000 ("node"); rename it.
+RUN usermod -l agent -d /home/agent -m node && groupmod -n agent node
 USER agent
 WORKDIR /home/agent
 ENTRYPOINT ["pocketagent"]

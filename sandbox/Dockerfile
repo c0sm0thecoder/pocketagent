@@ -16,6 +16,7 @@ RUN npm install -g @anthropic-ai/claude-code @agentclientprotocol/claude-agent-a
       @openai/codex @zed-industries/codex-acp @google/gemini-cli
 
 # Run as an unprivileged user (Claude Code refuses bypassPermissions as root).
-RUN useradd -m -u 1000 agent
+# node images already have uid 1000 ("node"); rename it.
+RUN usermod -l agent -d /home/agent -m node && groupmod -n agent node
 USER agent
 RUN git config --global user.name "pocketagent sandbox" && git config --global user.email "sandbox@localhost"
