@@ -13,7 +13,9 @@ import (
 	"syscall"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
+	"github.com/c0sm0thecoder/pocketagent/internal/agent/acp"
 	"github.com/c0sm0thecoder/pocketagent/internal/agent/claude"
+	"github.com/c0sm0thecoder/pocketagent/internal/agent/command"
 	"github.com/c0sm0thecoder/pocketagent/internal/bridge"
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
 	"github.com/c0sm0thecoder/pocketagent/internal/core"
@@ -126,6 +128,10 @@ func newAgent(ac config.Agent) (agent.Agent, error) {
 	switch ac.Type {
 	case "claude":
 		return claude.New(ac), nil
+	case "acp":
+		return acp.New(ac), nil
+	case "command":
+		return command.New(ac), nil
 	}
-	return nil, fmt.Errorf("agent type %q is not supported yet", ac.Type)
+	return nil, fmt.Errorf("unknown agent type %q", ac.Type)
 }
