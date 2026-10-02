@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep python3 build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Agents. Remove the ones you don't use.
-RUN npm install -g @anthropic-ai/claude-code @agentclientprotocol/claude-agent-acp \
-      @openai/codex @zed-industries/codex-acp @google/gemini-cli
+# Agents to preinstall; override with --build-arg AGENT_PACKAGES="...".
+ARG AGENT_PACKAGES="@agentclientprotocol/claude-agent-acp @anthropic-ai/claude-code @google/gemini-cli @openai/codex @zed-industries/codex-acp"
+RUN npm install -g $AGENT_PACKAGES
 
-# Run as an unprivileged user (Claude Code refuses bypassPermissions as root).
+# Run as an unprivileged user; some agents refuse full-access modes as root.
 # node images already have uid 1000 ("node"); rename it.
 RUN usermod -l agent -d /home/agent -m node && groupmod -n agent node
 USER agent

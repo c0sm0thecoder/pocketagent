@@ -13,8 +13,9 @@ FROM node:22-bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep python3 ffmpeg \
     && rm -rf /var/lib/apt/lists/*
-RUN npm install -g @anthropic-ai/claude-code @agentclientprotocol/claude-agent-acp \
-      @openai/codex @zed-industries/codex-acp @google/gemini-cli
+# Agents to preinstall; override with --build-arg AGENT_PACKAGES="...".
+ARG AGENT_PACKAGES="@agentclientprotocol/claude-agent-acp @anthropic-ai/claude-code @google/gemini-cli @openai/codex @zed-industries/codex-acp"
+RUN npm install -g $AGENT_PACKAGES
 COPY --from=build /pocketagent /usr/local/bin/pocketagent
 # node images already have uid 1000 ("node"); rename it.
 RUN usermod -l agent -d /home/agent -m node && groupmod -n agent node

@@ -12,7 +12,7 @@ pocketagent gives a Telegram chat control over a coding agent that runs on your 
 
 ## Hardening
 
-- Keep `mode: ask` as the default and use `edits` or `yolo` per project.
+- Keep `mode: ask` as the default and use `edits` or `full` per project.
 - Remove `read` from `auto_allow` if agents shouldn't read files outside the project without asking.
 - Run agents in a container (`wrap`, see docs/sandbox.md) so they only see the project directory.
 - Set `budget.daily_usd`.

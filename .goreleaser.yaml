@@ -38,7 +38,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
     homepage: https://github.com/c0sm0thecoder/pocketagent
-    description: Drive coding agents (Claude Code, Codex, Gemini, Kiro, Aider...) from Telegram
+    description: Drive any coding agent from your phone, with text, voice and images
     hooks:
       post:
         install: |
