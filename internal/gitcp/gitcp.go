@@ -14,6 +14,13 @@ import (
 	"strings"
 )
 
+// Git implements checkpoints with git. The zero value is ready to use.
+type Git struct{}
+
+func (Git) Snapshot(ctx context.Context, dir string) (string, error)   { return Snapshot(ctx, dir) }
+func (Git) Diff(ctx context.Context, dir, from string) (string, error) { return Diff(ctx, dir, from) }
+func (Git) Restore(ctx context.Context, dir, id string) error          { return Restore(ctx, dir, id) }
+
 func git(ctx context.Context, dir string, env []string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir

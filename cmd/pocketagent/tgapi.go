@@ -17,6 +17,13 @@ type tgUser struct {
 	FirstName string `json:"first_name"`
 }
 
+func (u tgUser) display() string {
+	if u.Username != "" {
+		return u.FirstName + " (@" + u.Username + ")"
+	}
+	return u.FirstName
+}
+
 func tgCall(ctx context.Context, token, method string, params url.Values, out any) error {
 	u := "https://api.telegram.org/bot" + token + "/" + method
 	if params != nil {

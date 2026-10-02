@@ -67,7 +67,7 @@ func (c *client) flush() {
 	c.text.Reset()
 	c.mu.Unlock()
 	if h != nil && strings.TrimSpace(text) != "" {
-		h.Text(text)
+		h.Message(text)
 	}
 }
 
@@ -107,7 +107,7 @@ func (c *client) SessionUpdate(_ context.Context, n sdk.SessionNotification) err
 		}
 	case u.ToolCall != nil:
 		c.flush()
-		h.Tool(u.ToolCall.Title, agent.Kind(u.ToolCall.Kind))
+		h.ToolCall(u.ToolCall.Title, agent.Kind(u.ToolCall.Kind))
 	}
 	return nil
 }

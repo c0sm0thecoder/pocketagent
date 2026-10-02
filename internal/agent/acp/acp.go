@@ -1,7 +1,6 @@
 // Package acp drives any agent that speaks the Agent Client Protocol
-// (Gemini CLI, Claude Code and Codex via adapters, Kiro, Goose, Copilot,
-// OpenCode, ...). One agent process is kept per conversation and reused
-// across turns, then stopped after it has been idle for a while.
+// (https://agentclientprotocol.com). One agent process is kept per
+// conversation and reused across turns, then stopped after it has been idle.
 package acp
 
 import (
@@ -9,9 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"maps"
 	"os"
 	"os/exec"
-	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -20,52 +20,79 @@ import (
 	sdk "github.com/coder/acp-go-sdk"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
-	"github.com/c0sm0thecoder/pocketagent/internal/agent/command"
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
+	"github.com/c0sm0thecoder/pocketagent/internal/argv"
+	"github.com/c0sm0thecoder/pocketagent/internal/term"
 )
 
-const idleTimeout = 30 * time.Minute
+type options struct {
+	// Modes maps pocketagent modes to the agent's mode ids, tried in order.
+	// Entries replace the defaults for that mode.
+	Modes map[agent.Mode][]string `yaml:"modes"`
+	// IdleTimeout stops a conversation's agent process after inactivity.
+	IdleTimeout time.Duration `yaml:"idle_timeout"`
+}
+
+// defaultModeIDs are mode ids common across ACP agents, most specific first.
+var defaultModeIDs = map[agent.Mode][]string{
+	agent.ModeAsk:   {"default", "ask", "normal"},
+	agent.ModeEdits: {"acceptEdits", "accept_edits", "auto_edit", "autoEdit", "auto-edit"},
+	agent.ModePlan:  {"plan"},
+	agent.ModeFull:  {"bypassPermissions", "full-access", "full_access", "yolo"},
+}
 
 type Agent struct {
-	cfg config.Agent
+	spec    agent.Spec
+	modeIDs map[agent.Mode][]string
+	idle    time.Duration
 
 	mu    sync.Mutex
 	procs map[string]*proc
 	stop  chan struct{}
 }
 
-func New(cfg config.Agent) *Agent {
-	a := &Agent{cfg: cfg, procs: map[string]*proc{}, stop: make(chan struct{})}
+var (
+	_ agent.Agent       = (*Agent)(nil)
+	_ agent.ModelLister = (*Agent)(nil)
+	_ io.Closer         = (*Agent)(nil)
+)
+
+func New(spec agent.Spec) (agent.Agent, error) {
+	var o options
+	if err := spec.Options.Decode(&o); err != nil {
+		return nil, err
+	}
+	a := &Agent{spec: spec, modeIDs: maps.Clone(defaultModeIDs), idle: 30 * time.Minute,
+		procs: map[string]*proc{}, stop: make(chan struct{})}
+	maps.Copy(a.modeIDs, o.Modes)
+	if o.IdleTimeout > 0 {
+		a.idle = o.IdleTimeout
+	}
 	go a.reap()
-	return a
+	return a, nil
 }
 
 func (a *Agent) Caps() agent.Caps {
 	// Exact support depends on the agent; these are reported optimistically
 	// and checked against the agent's own capabilities at run time.
-	return agent.Caps{
-		Images: true,
-		Resume: true,
-		Modes:  []agent.Mode{agent.ModeAsk, agent.ModeEdits, agent.ModePlan, agent.ModeYolo},
-	}
+	return agent.Caps{Images: true, Resume: true, Modes: agent.Modes}
 }
 
+// Models lists the models the agent offers in the conversation's session.
 func (a *Agent) Models(conv string) []string {
-	models := slices.Clone(a.cfg.Models)
 	a.mu.Lock()
 	p := a.procs[conv]
 	a.mu.Unlock()
-	if p != nil {
-		for _, o := range p.selectOptions(sdk.SessionConfigOptionCategoryModel) {
-			if !slices.Contains(models, string(o.Value)) {
-				models = append(models, string(o.Value))
-			}
-		}
+	if p == nil {
+		return nil
+	}
+	var models []string
+	for _, o := range p.selectOptions(sdk.SessionConfigOptionCategoryModel) {
+		models = append(models, string(o.Value))
 	}
 	return models
 }
 
-func (a *Agent) Close() {
+func (a *Agent) Close() error {
 	close(a.stop)
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -73,6 +100,7 @@ func (a *Agent) Close() {
 		p.kill()
 		delete(a.procs, k)
 	}
+	return nil
 }
 
 func (a *Agent) reap() {
@@ -86,7 +114,7 @@ func (a *Agent) reap() {
 		}
 		a.mu.Lock()
 		for k, p := range a.procs {
-			if p.idleSince() > idleTimeout {
+			if p.idleSince() > a.idle {
 				p.kill()
 				delete(a.procs, k)
 			}
@@ -205,10 +233,10 @@ func (a *Agent) proc(ctx context.Context, conv, cwd string) (*proc, error) {
 		return p, nil
 	}
 
-	argv := append(config.Expand(a.cfg.Wrap, map[string]string{"cwd": cwd}), a.cfg.Command...)
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmdline := argv.Join(a.spec.Wrap, a.spec.Command, map[string]string{"cwd": cwd})
+	cmd := exec.Command(cmdline[0], cmdline[1:]...)
 	cmd.Dir = cwd
-	cmd.Env = append(os.Environ(), a.cfg.Env...)
+	cmd.Env = append(os.Environ(), a.spec.Env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	errTail := &tail{}
 	cmd.Stderr = errTail
@@ -221,7 +249,7 @@ func (a *Agent) proc(ctx context.Context, conv, cwd string) (*proc, error) {
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start %s: %w", argv[0], err)
+		return nil, fmt.Errorf("start %s: %w", cmdline[0], err)
 	}
 	go cmd.Wait()
 
@@ -254,7 +282,7 @@ func (a *Agent) explain(step string, err error, p *proc) error {
 		data, _ := json.Marshal(re)
 		msg = string(data)
 	}
-	if s := command.StripANSI(p.stderr.String()); s != "" {
+	if s := term.StripANSI(p.stderr.String()); s != "" {
 		if i := strings.LastIndex(s, "\n"); i >= 0 && len(s)-i < 400 {
 			s = s[i+1:]
 		}
@@ -263,7 +291,7 @@ func (a *Agent) explain(step string, err error, p *proc) error {
 	if len(p.init.AuthMethods) > 0 && strings.Contains(strings.ToLower(msg), "auth") {
 		msg += "\nThe agent needs you to log in: run it once in a terminal on this machine."
 	}
-	return fmt.Errorf("%s %s: %s", a.cfg.Command[0], step, msg)
+	return fmt.Errorf("%s %s: %s", a.spec.Name, step, msg)
 }
 
 // ---------- turn ----------
@@ -294,7 +322,7 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 	costAtStart := cl.cost()
 	a.applyMode(ctx, p, sid, req.Mode)
 	if err := a.applyModel(ctx, p, sid, req.Model); err != nil {
-		h.Text("_" + err.Error() + "_")
+		h.Message("_" + err.Error() + "_")
 	}
 
 	var prompt []sdk.ContentBlock
@@ -348,14 +376,14 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 }
 
 func (a *Agent) mcpServers(p *proc, req agent.Request) []sdk.McpServer {
-	if req.MCP == nil || !p.init.AgentCapabilities.McpCapabilities.Http {
+	if req.Tools == nil || !p.init.AgentCapabilities.McpCapabilities.Http {
 		return []sdk.McpServer{}
 	}
 	var headers []sdk.HttpHeader
-	for k, v := range req.MCP.Headers {
+	for k, v := range req.Tools.Headers {
 		headers = append(headers, sdk.HttpHeader{Name: k, Value: v})
 	}
-	return []sdk.McpServer{{Http: &sdk.McpServerHttpInline{Name: req.MCP.Name, Type: "http", Url: req.MCP.URL, Headers: headers}}}
+	return []sdk.McpServer{{Http: &sdk.McpServerHttpInline{Name: req.Tools.Name, Type: "http", Url: req.Tools.URL, Headers: headers}}}
 }
 
 // session makes sure the process has the requested session open, resuming
@@ -393,7 +421,7 @@ func (a *Agent) session(ctx context.Context, p *proc, req agent.Request, h agent
 		default:
 			err = errors.New("this agent can't resume sessions")
 		}
-		h.Text("_Couldn't resume the previous session (" + shortErr(err) + "), starting a new one._")
+		h.Message("_Couldn't resume the previous session (" + shortErr(err) + "), starting a new one._")
 	}
 
 	resp, err := p.conn.NewSession(ctx, sdk.NewSessionRequest{Cwd: req.Cwd, McpServers: mcp})
@@ -421,16 +449,8 @@ func (p *proc) setSession(id string, opts []sdk.SessionConfigOption, modes *sdk.
 	p.sessionID, p.options, p.modes = id, opts, modes
 }
 
-// Preferred agent mode ids for each pocketagent mode, most specific first.
-var modeIDs = map[agent.Mode][]string{
-	agent.ModeAsk:   {"default", "ask", "normal"},
-	agent.ModeEdits: {"acceptEdits", "accept_edits", "auto_edit", "autoEdit", "auto-edit"},
-	agent.ModePlan:  {"plan"},
-	agent.ModeYolo:  {"bypassPermissions", "yolo", "full-access", "full_access"},
-}
-
 func (a *Agent) applyMode(ctx context.Context, p *proc, sid string, mode agent.Mode) {
-	want := modeIDs[mode]
+	want := a.modeIDs[mode]
 	p.mu.Lock()
 	modes := p.modes
 	p.mu.Unlock()
@@ -469,9 +489,6 @@ func (a *Agent) applyMode(ctx context.Context, p *proc, sid string, mode agent.M
 }
 
 func (a *Agent) applyModel(ctx context.Context, p *proc, sid, model string) error {
-	if model == "" {
-		model = a.cfg.Model
-	}
 	if model == "" {
 		return nil
 	}

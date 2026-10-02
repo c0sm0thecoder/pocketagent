@@ -1,10 +1,11 @@
-// Package tts turns replies into voice notes.
+// Package tts turns replies into voice messages.
 package tts
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,41 +15,29 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
+	"github.com/c0sm0thecoder/pocketagent/internal/argv"
 )
 
+// Speaker turns text into OGG/Opus audio, the usual voice-message format.
 type Speaker interface {
-	// Speak returns OGG/Opus audio, the format Telegram voice notes use.
 	Speak(ctx context.Context, text string) ([]byte, error)
 }
 
-// New returns nil when TTS is disabled.
-func New(c config.TTS) (Speaker, error) {
-	switch c.Type {
-	case "none", "":
-		return nil, nil
-	case "say":
-		return &say{voice: c.Voice, ffmpeg: c.FFmpeg}, nil
-	case "openai":
-		base := strings.TrimRight(c.BaseURL, "/")
-		if base == "" {
-			base = "https://api.openai.com/v1"
+// Options decodes a provider's config keys.
+type Options interface {
+	Decode(v any) error
+}
+
+// Factory builds a Speaker from its options.
+type Factory func(Options) (Speaker, error)
+
+func onPath(bins ...string) error {
+	for _, b := range bins {
+		if _, err := exec.LookPath(b); err != nil {
+			return fmt.Errorf("%s not found on PATH", b)
 		}
-		model, voice := c.Model, c.Voice
-		if model == "" {
-			model = "gpt-4o-mini-tts"
-		}
-		if voice == "" {
-			voice = "alloy"
-		}
-		return &openAI{base: base, key: c.APIKey, model: model, voice: voice}, nil
-	case "command":
-		if len(c.Command) == 0 {
-			return nil, fmt.Errorf("tts.command is required for type command")
-		}
-		return &command{argv: c.Command, ffmpeg: c.FFmpeg}, nil
 	}
-	return nil, fmt.Errorf("unknown tts.type %q (say, openai, command, none)", c.Type)
+	return nil
 }
 
 var (
@@ -56,11 +45,10 @@ var (
 	reMarkup    = regexp.MustCompile("[*_`#>]+")
 )
 
-// Speakable strips Markdown and code so the voice reads prose only.
+// Speakable strips Markdown and code so only prose is read aloud.
 func Speakable(md string) string {
 	s := reCodeBlock.ReplaceAllString(md, " (code omitted) ")
-	s = reMarkup.ReplaceAllString(s, "")
-	return strings.TrimSpace(s)
+	return strings.TrimSpace(reMarkup.ReplaceAllString(s, ""))
 }
 
 func toOpus(ctx context.Context, ffmpeg, in string) ([]byte, error) {
@@ -73,7 +61,21 @@ func toOpus(ctx context.Context, ffmpeg, in string) ([]byte, error) {
 	return os.ReadFile(out)
 }
 
-type say struct{ voice, ffmpeg string }
+// ---------- say ----------
+
+type say struct {
+	Voice  string `yaml:"voice"`
+	FFmpeg string `yaml:"ffmpeg"`
+}
+
+// NewSay uses the macOS `say` command.
+func NewSay(o Options) (Speaker, error) {
+	s := &say{FFmpeg: "ffmpeg"}
+	return s, o.Decode(s)
+}
+
+// Check verifies the local tools exist.
+func (s *say) Check() error { return onPath("say", s.FFmpeg) }
 
 func (s *say) Speak(ctx context.Context, text string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "pocketagent-tts-*")
@@ -83,29 +85,49 @@ func (s *say) Speak(ctx context.Context, text string) ([]byte, error) {
 	defer os.RemoveAll(dir)
 	aiff := filepath.Join(dir, "speech.aiff")
 	args := []string{"-o", aiff}
-	if s.voice != "" {
-		args = append(args, "-v", s.voice)
+	if s.Voice != "" {
+		args = append(args, "-v", s.Voice)
 	}
-	cmd := exec.CommandContext(ctx, "say", append(args, text)...)
-	if b, err := cmd.CombinedOutput(); err != nil {
+	if b, err := exec.CommandContext(ctx, "say", append(args, text)...).CombinedOutput(); err != nil {
 		return nil, fmt.Errorf("say: %v: %s", err, bytes.TrimSpace(b))
 	}
-	return toOpus(ctx, s.ffmpeg, aiff)
+	return toOpus(ctx, s.FFmpeg, aiff)
 }
 
-type openAI struct{ base, key, model, voice string }
+// ---------- HTTP ----------
 
-func (o *openAI) Speak(ctx context.Context, text string) ([]byte, error) {
+type httpAPI struct {
+	BaseURL string `yaml:"base_url"`
+	APIKey  string `yaml:"api_key"`
+	Model   string `yaml:"model"`
+	Voice   string `yaml:"voice"`
+}
+
+// NewHTTP posts text to an /audio/speech endpoint, the de facto standard
+// API served by many hosted and self-hosted speech services.
+func NewHTTP(o Options) (Speaker, error) {
+	h := &httpAPI{}
+	if err := o.Decode(h); err != nil {
+		return nil, err
+	}
+	if h.BaseURL == "" || h.Model == "" || h.Voice == "" {
+		return nil, errors.New("base_url, model and voice are required")
+	}
+	h.BaseURL = strings.TrimRight(h.BaseURL, "/")
+	return h, nil
+}
+
+func (h *httpAPI) Speak(ctx context.Context, text string) ([]byte, error) {
 	body, _ := json.Marshal(map[string]string{
-		"model": o.model, "voice": o.voice, "input": text, "response_format": "opus",
+		"model": h.Model, "voice": h.Voice, "input": text, "response_format": "opus",
 	})
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.base+"/audio/speech", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.BaseURL+"/audio/speech", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if o.key != "" {
-		req.Header.Set("Authorization", "Bearer "+o.key)
+	if h.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.APIKey)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -119,12 +141,27 @@ func (o *openAI) Speak(ctx context.Context, text string) ([]byte, error) {
 	return data, nil
 }
 
-// command runs a template with {text_file} (input) and {out} (an audio file
-// in any format ffmpeg reads).
+// ---------- command ----------
+
 type command struct {
-	argv   []string
-	ffmpeg string
+	Command []string `yaml:"command"` // {text_file} in, {out} an audio file ffmpeg can read
+	FFmpeg  string   `yaml:"ffmpeg"`
 }
+
+// NewCommand runs any program that writes speech to a file.
+func NewCommand(o Options) (Speaker, error) {
+	c := &command{FFmpeg: "ffmpeg"}
+	if err := o.Decode(c); err != nil {
+		return nil, err
+	}
+	if len(c.Command) == 0 {
+		return nil, errors.New("command is required")
+	}
+	return c, nil
+}
+
+// Check verifies the local tools exist.
+func (c *command) Check() error { return onPath(c.Command[0], c.FFmpeg) }
 
 func (c *command) Speak(ctx context.Context, text string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "pocketagent-tts-*")
@@ -136,9 +173,9 @@ func (c *command) Speak(ctx context.Context, text string) ([]byte, error) {
 	if err := os.WriteFile(in, []byte(text), 0o600); err != nil {
 		return nil, err
 	}
-	argv := config.Expand(c.argv, map[string]string{"text_file": in, "out": out})
-	if b, err := exec.CommandContext(ctx, argv[0], argv[1:]...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s: %v: %s", argv[0], err, bytes.TrimSpace(b))
+	line := argv.Expand(c.Command, map[string]string{"text_file": in, "out": out})
+	if b, err := exec.CommandContext(ctx, line[0], line[1:]...).CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("%s: %v: %s", line[0], err, bytes.TrimSpace(b))
 	}
-	return toOpus(ctx, c.ffmpeg, out)
+	return toOpus(ctx, c.FFmpeg, out)
 }

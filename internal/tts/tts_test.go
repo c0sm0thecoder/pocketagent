@@ -18,7 +18,7 @@ func TestSpeakable(t *testing.T) {
 	}
 }
 
-func TestOpenAICompatible(t *testing.T) {
+func TestHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]string
 		json.NewDecoder(r.Body).Decode(&body)
@@ -29,7 +29,10 @@ func TestOpenAICompatible(t *testing.T) {
 		w.Write([]byte("OggS..."))
 	}))
 	defer srv.Close()
-	sp, _ := New(config.TTS{Type: "openai", BaseURL: srv.URL, Voice: "v"})
+	sp, err := NewHTTP(config.OptionsFrom(map[string]any{"base_url": srv.URL, "model": "m", "voice": "v"}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := sp.Speak(context.Background(), "hi")
 	if err != nil || string(got) != "OggS..." {
 		t.Errorf("got %q, %v", got, err)

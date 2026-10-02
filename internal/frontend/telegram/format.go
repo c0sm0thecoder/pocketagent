@@ -64,7 +64,7 @@ var (
 	reStrike     = regexp.MustCompile(`~~([^~\n]+)~~`)
 )
 
-// markdownToHTML converts the Markdown Claude usually writes into the
+// markdownToHTML converts the Markdown agents usually write into the
 // small HTML subset Telegram supports. Anything else stays escaped text.
 func markdownToHTML(md string) string {
 	var out strings.Builder

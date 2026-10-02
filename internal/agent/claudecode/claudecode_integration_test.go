@@ -1,6 +1,6 @@
 //go:build integration
 
-package claude_test
+package claudecode_test
 
 import (
 	"context"
@@ -11,9 +11,8 @@ import (
 	"time"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
-	"github.com/c0sm0thecoder/pocketagent/internal/agent/claude"
+	"github.com/c0sm0thecoder/pocketagent/internal/agent/claudecode"
 	"github.com/c0sm0thecoder/pocketagent/internal/bridge"
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
 )
 
 type autoHandler struct {
@@ -22,9 +21,10 @@ type autoHandler struct {
 	text  strings.Builder
 }
 
-func (h *autoHandler) Session(string)          {}
-func (h *autoHandler) Text(s string)           { h.text.WriteString(s) }
-func (h *autoHandler) Tool(string, agent.Kind) {}
+func (h *autoHandler) Session(string)                                 {}
+func (h *autoHandler) Message(s string)                               { h.text.WriteString(s) }
+func (h *autoHandler) ToolCall(string, agent.Kind)                    {}
+func (h *autoHandler) SendFile(context.Context, string, string) error { return nil }
 func (h *autoHandler) Permission(_ context.Context, p agent.Permission) agent.Decision {
 	h.asked = append(h.asked, p.Tool+" "+string(p.Kind))
 	if h.allow {
@@ -33,27 +33,37 @@ func (h *autoHandler) Permission(_ context.Context, p agent.Permission) agent.De
 	return agent.Decision{OptionID: "deny", Message: "not today"}
 }
 
-// go test -tags integration ./internal/agent/claude/
-func TestApprovalsThroughBridge(t *testing.T) {
-	br, err := bridge.Start("")
+func newAgent(t *testing.T) agent.Agent {
+	t.Helper()
+	a, err := claudecode.New(agent.Spec{Name: "claude-code", Command: []string{"claude"}, Options: agent.NoOptions{}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := claude.New(config.Agent{})
+	return a
+}
+
+// go test -tags integration ./internal/agent/claudecode/
+func TestApprovalsThroughToolServer(t *testing.T) {
+	a := newAgent(t)
+	tools, err := bridge.Start("", bridge.SendFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools.AddAgent("claude-code", a.(agent.ToolProvider).Tools())
 	for _, allow := range []bool{true, false} {
 		h := &autoHandler{allow: allow}
-		unregister := br.Register("t", &bridge.Endpoint{Handler: h})
+		detach := tools.Attach("t", h)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 		res, err := a.Run(ctx, agent.Request{
-			Conv: "t", Cwd: t.TempDir(), Model: "haiku", Mode: agent.ModeAsk, MCP: br.Server("t"),
+			Conv: "t", Cwd: t.TempDir(), Model: "haiku", Mode: agent.ModeAsk, Tools: tools.Server("claude-code", "t"),
 			Prompt: []agent.Block{{Text: "Use Bash to run exactly: touch marker.txt && echo bridge-ok-123 . Then reply with its output, or DENIED if you were not allowed."}},
 		}, h)
 		cancel()
-		unregister()
+		detach()
 		if err != nil {
 			t.Fatalf("allow=%v: %v", allow, err)
 		}
-		out := h.text.String() + res.FinalText
+		out := h.text.String() + res.Final
 		t.Logf("allow=%v asked=%v out=%q cost=$%.4f", allow, h.asked, out, res.CostUSD)
 		if len(h.asked) == 0 || h.asked[0] != "Bash execute" {
 			t.Errorf("allow=%v: asked = %v", allow, h.asked)
@@ -71,14 +81,14 @@ func TestImage(t *testing.T) {
 	}
 	data, _ := os.ReadFile(png)
 	h := &autoHandler{}
-	res, err := claude.New(config.Agent{}).Run(context.Background(), agent.Request{
+	res, err := newAgent(t).Run(context.Background(), agent.Request{
 		Cwd: t.TempDir(), Model: "haiku",
 		Prompt: []agent.Block{{Image: data, MimeType: "image/png"}, {Text: "What single color fills this image? One lowercase word."}},
 	}, h)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out := strings.ToLower(h.text.String() + res.FinalText); !strings.Contains(out, "red") {
+	if out := strings.ToLower(h.text.String() + res.Final); !strings.Contains(out, "red") {
 		t.Errorf("model did not see the image: %q", out)
 	}
 }

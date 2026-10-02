@@ -12,7 +12,7 @@ import (
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
 )
 
-func TestOpenAICompatible(t *testing.T) {
+func TestHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/audio/transcriptions" || r.Header.Get("Authorization") != "Bearer k" {
 			http.Error(w, "bad request "+r.URL.Path, 400)
@@ -28,7 +28,7 @@ func TestOpenAICompatible(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tr, err := New(config.Transcriber{Type: "openai", BaseURL: srv.URL + "/v1/", APIKey: "k", Model: "m"})
+	tr, err := NewHTTP(config.OptionsFrom(map[string]any{"base_url": srv.URL + "/v1/", "api_key": "k", "model": "m"}))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,18 +41,21 @@ func TestOpenAICompatible(t *testing.T) {
 }
 
 func TestCommand(t *testing.T) {
-	tr, _ := New(config.Transcriber{Type: "command", Command: config.Command{"sh", "-c", "echo transcript of $(basename $0)", "{file}"}})
+	tr, _ := NewCommand(config.OptionsFrom(map[string]any{"command": []string{"sh", "-c", "echo transcript of $(basename $0)", "{file}"}}))
 	got, err := tr.Transcribe(context.Background(), "/tmp/x.ogg")
 	if err != nil || got != "transcript of x.ogg" {
 		t.Errorf("got %q, %v", got, err)
 	}
 }
 
-func TestNone(t *testing.T) {
-	if tr, err := New(config.Transcriber{Type: "none"}); tr != nil || err != nil {
-		t.Errorf("none: %v %v", tr, err)
+func TestRequiredOptions(t *testing.T) {
+	if _, err := NewHTTP(config.OptionsFrom(map[string]any{"model": "m"})); err == nil {
+		t.Error("http without base_url accepted")
 	}
-	if _, err := New(config.Transcriber{Type: "nope"}); err == nil {
-		t.Error("unknown type accepted")
+	if _, err := NewWhisperCpp(config.OptionsFrom(map[string]any{})); err == nil {
+		t.Error("whisper-cpp without model accepted")
+	}
+	if _, err := NewHTTP(config.OptionsFrom(map[string]any{"base_url": "u", "model": "m", "voice": "v"})); err == nil {
+		t.Error("unknown option accepted")
 	}
 }

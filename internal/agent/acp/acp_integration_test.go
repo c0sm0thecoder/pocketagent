@@ -4,6 +4,7 @@ package acp_test
 
 import (
 	"context"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -12,7 +13,6 @@ import (
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
 	"github.com/c0sm0thecoder/pocketagent/internal/agent/acp"
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
 )
 
 type autoHandler struct {
@@ -24,9 +24,10 @@ type autoHandler struct {
 	session string
 }
 
-func (h *autoHandler) Session(id string) { h.session = id }
-func (h *autoHandler) Text(s string)     { h.mu.Lock(); h.text.WriteString(s); h.mu.Unlock() }
-func (h *autoHandler) Tool(t string, k agent.Kind) {
+func (h *autoHandler) Session(id string)                              { h.session = id }
+func (h *autoHandler) SendFile(context.Context, string, string) error { return nil }
+func (h *autoHandler) Message(s string)                               { h.mu.Lock(); h.text.WriteString(s); h.mu.Unlock() }
+func (h *autoHandler) ToolCall(t string, k agent.Kind) {
 	h.mu.Lock()
 	h.tools = append(h.tools, string(k)+": "+t)
 	h.mu.Unlock()
@@ -49,15 +50,19 @@ func TestACPAgent(t *testing.T) {
 	if cmd == "" {
 		cmd = "npx -y @agentclientprotocol/claude-agent-acp"
 	}
-	a := acp.New(config.Agent{Command: strings.Fields(cmd), Model: os.Getenv("POCKETAGENT_ACP_MODEL")})
-	defer a.Close()
+	a, err := acp.New(agent.Spec{Name: "acp-test", Command: strings.Fields(cmd), Options: agent.NoOptions{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.(io.Closer).Close()
+	models := a.(agent.ModelLister)
 	dir := t.TempDir()
 
 	run := func(allow bool, prompt, session string) (*autoHandler, agent.Result) {
 		h := &autoHandler{allow: allow}
 		ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
 		defer cancel()
-		res, err := a.Run(ctx, agent.Request{Conv: "t", Cwd: dir, Mode: agent.ModeAsk, SessionID: session,
+		res, err := a.Run(ctx, agent.Request{Conv: "t", Cwd: dir, Mode: agent.ModeAsk, SessionID: session, Model: os.Getenv("POCKETAGENT_ACP_MODEL"),
 			Prompt: []agent.Block{{Text: prompt}}}, h)
 		if err != nil {
 			t.Fatalf("run: %v", err)
@@ -67,7 +72,7 @@ func TestACPAgent(t *testing.T) {
 			asked = append(asked, string(p.Kind)+" "+p.Tool+" | "+strings.ReplaceAll(p.Detail, "\n", " "))
 		}
 		t.Logf("allow=%v tools=%v asked=%v text=%q stop=%s cost=$%.4f models=%v",
-			allow, h.tools, asked, h.text.String(), res.StopReason, res.CostUSD, a.Models("t"))
+			allow, h.tools, asked, h.text.String(), res.StopReason, res.CostUSD, models.Models("t"))
 		return h, res
 	}
 

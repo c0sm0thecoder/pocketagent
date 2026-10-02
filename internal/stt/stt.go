@@ -1,10 +1,11 @@
-// Package stt turns voice notes into text.
+// Package stt turns voice messages into text.
 package stt
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -14,48 +15,84 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
+	"github.com/c0sm0thecoder/pocketagent/internal/argv"
 )
 
+// Transcriber turns an audio file into text.
 type Transcriber interface {
-	// Transcribe reads an audio file (Telegram voice notes are OGG/Opus).
 	Transcribe(ctx context.Context, path string) (string, error)
 }
 
-// New returns nil when transcription is disabled.
-func New(c config.Transcriber) (Transcriber, error) {
-	switch c.Type {
-	case "none", "":
-		return nil, nil
-	case "whisper-cpp":
-		if c.Model == "" {
-			return nil, fmt.Errorf("transcriber.model is required for whisper-cpp (path to a ggml model)")
-		}
-		bin := "whisper-cli"
-		if len(c.Command) > 0 {
-			bin = c.Command[0]
-		}
-		return &whisperCpp{bin: bin, model: c.Model, lang: c.Language, ffmpeg: c.FFmpeg}, nil
-	case "openai":
-		base := strings.TrimRight(c.BaseURL, "/")
-		if base == "" {
-			base = "https://api.openai.com/v1"
-		}
-		model := c.Model
-		if model == "" {
-			model = "whisper-1"
-		}
-		return &openAI{base: base, key: c.APIKey, model: model, lang: c.Language}, nil
-	case "command":
-		if len(c.Command) == 0 {
-			return nil, fmt.Errorf("transcriber.command is required for type command")
-		}
-		return &command{argv: c.Command}, nil
-	}
-	return nil, fmt.Errorf("unknown transcriber.type %q (whisper-cpp, openai, command, none)", c.Type)
+// Options decodes a provider's config keys.
+type Options interface {
+	Decode(v any) error
 }
 
-// ToWav converts any audio ffmpeg understands to 16 kHz mono WAV.
+// Factory builds a Transcriber from its options.
+type Factory func(Options) (Transcriber, error)
+
+func onPath(bins ...string) error {
+	for _, b := range bins {
+		if _, err := exec.LookPath(b); err != nil {
+			return fmt.Errorf("%s not found on PATH", b)
+		}
+	}
+	return nil
+}
+
+// ---------- whisper.cpp ----------
+
+type whisperCpp struct {
+	Binary   string `yaml:"binary"`
+	Model    string `yaml:"model"`    // path to a ggml model
+	Language string `yaml:"language"` // "auto" or an ISO code
+	FFmpeg   string `yaml:"ffmpeg"`
+}
+
+// NewWhisperCpp transcribes locally with whisper.cpp.
+func NewWhisperCpp(o Options) (Transcriber, error) {
+	w := &whisperCpp{Binary: "whisper-cli", Language: "auto", FFmpeg: "ffmpeg"}
+	if err := o.Decode(w); err != nil {
+		return nil, err
+	}
+	if w.Model == "" {
+		return nil, errors.New("model is required (path to a ggml model file)")
+	}
+	w.Model = expandHome(w.Model)
+	return w, nil
+}
+
+// Check verifies whisper.cpp, ffmpeg and the model are present.
+func (w *whisperCpp) Check() error {
+	if err := onPath(w.Binary, w.FFmpeg); err != nil {
+		return err
+	}
+	if _, err := os.Stat(w.Model); err != nil {
+		return fmt.Errorf("model %s: %w", w.Model, err)
+	}
+	return nil
+}
+
+func (w *whisperCpp) Transcribe(ctx context.Context, path string) (string, error) {
+	dir, err := os.MkdirTemp("", "pocketagent-stt-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
+	wav := filepath.Join(dir, "audio.wav")
+	if err := ToWav(ctx, w.FFmpeg, path, wav); err != nil {
+		return "", err
+	}
+	var stdout, stderr bytes.Buffer
+	cmd := exec.CommandContext(ctx, w.Binary, "-m", w.Model, "-f", wav, "-l", w.Language, "-nt", "-np")
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s: %v: %s", w.Binary, err, lastLine(stderr.String()))
+	}
+	return clean(stdout.String())
+}
+
+// ToWav converts any audio ffmpeg reads to 16 kHz mono WAV.
 func ToWav(ctx context.Context, ffmpeg, in, out string) error {
 	cmd := exec.CommandContext(ctx, ffmpeg, "-nostdin", "-loglevel", "error", "-y",
 		"-i", in, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", out)
@@ -65,30 +102,30 @@ func ToWav(ctx context.Context, ffmpeg, in, out string) error {
 	return nil
 }
 
-type whisperCpp struct{ bin, model, lang, ffmpeg string }
+// ---------- HTTP ----------
 
-func (w *whisperCpp) Transcribe(ctx context.Context, path string) (string, error) {
-	dir, err := os.MkdirTemp("", "pocketagent-stt-*")
-	if err != nil {
-		return "", err
-	}
-	defer os.RemoveAll(dir)
-	wav := filepath.Join(dir, "audio.wav")
-	if err := ToWav(ctx, w.ffmpeg, path, wav); err != nil {
-		return "", err
-	}
-	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, w.bin, "-m", w.model, "-f", wav, "-l", w.lang, "-nt", "-np")
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %v: %s", w.bin, err, lastLine(stderr.String()))
-	}
-	return clean(stdout.String())
+type httpAPI struct {
+	BaseURL  string `yaml:"base_url"`
+	APIKey   string `yaml:"api_key"`
+	Model    string `yaml:"model"`
+	Language string `yaml:"language"`
 }
 
-type openAI struct{ base, key, model, lang string }
+// NewHTTP posts audio to a /audio/transcriptions endpoint, the de facto
+// standard API served by many hosted and self-hosted speech services.
+func NewHTTP(o Options) (Transcriber, error) {
+	h := &httpAPI{}
+	if err := o.Decode(h); err != nil {
+		return nil, err
+	}
+	if h.BaseURL == "" || h.Model == "" {
+		return nil, errors.New("base_url and model are required")
+	}
+	h.BaseURL = strings.TrimRight(h.BaseURL, "/")
+	return h, nil
+}
 
-func (o *openAI) Transcribe(ctx context.Context, path string) (string, error) {
+func (h *httpAPI) Transcribe(ctx context.Context, path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
@@ -97,11 +134,11 @@ func (o *openAI) Transcribe(ctx context.Context, path string) (string, error) {
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
-	mw.WriteField("model", o.model)
-	if o.lang != "" && o.lang != "auto" {
-		mw.WriteField("language", o.lang)
+	mw.WriteField("model", h.Model)
+	if h.Language != "" && h.Language != "auto" {
+		mw.WriteField("language", h.Language)
 	}
-	// Telegram's .oga is OGG; most endpoints only accept the .ogg extension.
+	// Many endpoints accept OGG only under the .ogg extension, not .oga.
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)) + ".ogg"
 	fw, _ := mw.CreateFormFile("file", name)
 	if _, err := io.Copy(fw, f); err != nil {
@@ -109,13 +146,13 @@ func (o *openAI) Transcribe(ctx context.Context, path string) (string, error) {
 	}
 	mw.Close()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.base+"/audio/transcriptions", &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.BaseURL+"/audio/transcriptions", &body)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	if o.key != "" {
-		req.Header.Set("Authorization", "Bearer "+o.key)
+	if h.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.APIKey)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -135,31 +172,44 @@ func (o *openAI) Transcribe(ctx context.Context, path string) (string, error) {
 	return clean(out.Text)
 }
 
-// command runs a user-supplied template; {file} is the audio path and
-// stdout is the transcript.
-type command struct{ argv []string }
+// ---------- command ----------
+
+type command struct {
+	Command []string `yaml:"command"` // {file} is the audio path; stdout is the transcript
+}
+
+// NewCommand runs any program that prints a transcript.
+func NewCommand(o Options) (Transcriber, error) {
+	c := &command{}
+	if err := o.Decode(c); err != nil {
+		return nil, err
+	}
+	if len(c.Command) == 0 {
+		return nil, errors.New("command is required")
+	}
+	return c, nil
+}
+
+// Check verifies the command exists.
+func (c *command) Check() error { return onPath(c.Command[0]) }
 
 func (c *command) Transcribe(ctx context.Context, path string) (string, error) {
-	argv := config.Expand(c.argv, map[string]string{"file": path})
+	line := argv.Expand(c.Command, map[string]string{"file": path})
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	cmd := exec.CommandContext(ctx, line[0], line[1:]...)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %v: %s", argv[0], err, lastLine(stderr.String()))
+		return "", fmt.Errorf("%s: %v: %s", line[0], err, lastLine(stderr.String()))
 	}
 	return clean(stdout.String())
 }
 
+// ---------- helpers ----------
+
 func clean(s string) (string, error) {
-	var lines []string
-	for _, l := range strings.Split(s, "\n") {
-		if l = strings.TrimSpace(l); l != "" {
-			lines = append(lines, l)
-		}
-	}
-	text := strings.Join(lines, " ")
+	text := strings.Join(strings.Fields(s), " ")
 	if text == "" || text == "[BLANK_AUDIO]" {
-		return "", fmt.Errorf("couldn't hear anything in that voice message")
+		return "", errors.New("couldn't hear anything in that voice message")
 	}
 	return text, nil
 }
@@ -170,4 +220,12 @@ func lastLine(s string) string {
 		return s[i+1:]
 	}
 	return s
+}
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, p[2:])
+	}
+	return p
 }

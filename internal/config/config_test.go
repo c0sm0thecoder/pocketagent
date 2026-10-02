@@ -1,10 +1,11 @@
 package config
 
 import (
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/c0sm0thecoder/pocketagent/internal/agent"
 )
 
 func TestExampleConfigLoads(t *testing.T) {
@@ -16,46 +17,84 @@ func TestExampleConfigLoads(t *testing.T) {
 	if c.Telegram.Token != "123:abc" {
 		t.Errorf("env not expanded: %q", c.Telegram.Token)
 	}
-	if c.Defaults.Agent != "claude" || c.Agents["claude"].Command[0] != "claude" {
-		t.Errorf("agents: %+v", c.Agents)
+	if _, ok := c.Agents[c.Defaults.Agent]; !ok {
+		t.Errorf("default agent %q not configured", c.Defaults.Agent)
 	}
-	if c.ApprovalTimeout.D().Minutes() != 10 {
-		t.Errorf("timeout = %v", c.ApprovalTimeout.D())
-	}
-	if !strings.HasPrefix(c.Projects["pocketagent"].Cwd, "/") {
-		t.Errorf("project cwd not expanded: %q", c.Projects["pocketagent"].Cwd)
+	if c.Permissions.Timeout.D() != 10*time.Minute {
+		t.Errorf("timeout = %v", c.Permissions.Timeout.D())
 	}
 }
 
+const base = "telegram: {token: x, allowed_users: [1]}\n"
+
 func TestValidation(t *testing.T) {
 	cases := map[string]string{
-		"telegram:\n  token: x\n": "allowed_users",
-		"telegram:\n  token: x\n  allowed_users: [1]\nagents:\n  a: {type: nope}\n":  "type must be",
-		"telegram:\n  token: x\n  allowed_users: [1]\ndefaults:\n  agent: missing\n": "not in agents",
-		"telegram:\n  token: x\n  allowed_users: [1]\nbogus: 1\n":                    "bogus",
+		"telegram: {token: x}\nagents: {a: {type: t, command: c}}\n": "allowed_users",
+		base:                                 "at least one agent",
+		base + "agents: {a: {command: c}}\n": "type is required",
+		base + "agents: {a: {type: t}}\n":    "command is required",
+		base + "agents: {a: {type: t, command: c}}\ndefaults: {agent: b}\n":                 "not in agents",
+		base + "agents: {a: {type: t, command: c}}\ndefaults: {mode: wild}\n":               "not one of",
+		base + "agents: {a: {type: t, command: c}}\npermissions: {auto_allow: [execute]}\n": "too broad",
+		base + "agents: {a: {type: t, command: c}}\nbogus: 1\n":                             "bogus",
 	}
 	for body, want := range cases {
-		p := filepath.Join(t.TempDir(), "c.yaml")
-		os.WriteFile(p, []byte(body), 0o600)
-		_, err := Load(p)
+		_, err := Parse([]byte(body), "/tmp/c.yaml")
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("config %q: err = %v, want %q", body, err, want)
 		}
 	}
 }
 
-func TestCommandAcceptsStringOrList(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "c.yaml")
-	os.WriteFile(p, []byte(`telegram: {token: x, allowed_users: [1]}
-agents:
-  a: {type: acp, command: "gemini --acp"}
-  b: {type: acp, command: [npx, -y, "@zed-industries/codex-acp"]}
-`), 0o600)
-	c, err := Load(p)
+// Keys an agent's adapter owns are passed through as Options, untouched.
+func TestAgentOptionsPassThrough(t *testing.T) {
+	c, err := Parse([]byte(base+`agents:
+  a:
+    type: command
+    command: "tool --flag"
+    models: [m1]
+    stdin: true
+    image_args: ["{path}"]
+`), "/tmp/c.yaml")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(c.Agents["a"].Command, " ") != "gemini --acp" || len(c.Agents["b"].Command) != 3 {
-		t.Errorf("commands: %v %v", c.Agents["a"].Command, c.Agents["b"].Command)
+	a := c.Agents["a"]
+	if strings.Join(a.Command, " ") != "tool --flag" || a.Models[0] != "m1" {
+		t.Errorf("common fields: %+v", a)
+	}
+	var opts struct {
+		Stdin     bool     `yaml:"stdin"`
+		ImageArgs []string `yaml:"image_args"`
+	}
+	if err := a.Options.Decode(&opts); err != nil || !opts.Stdin || opts.ImageArgs[0] != "{path}" {
+		t.Errorf("options = %+v, %v", opts, err)
+	}
+	// Decoding is strict: an adapter that doesn't know a key rejects it.
+	var narrow struct {
+		Stdin bool `yaml:"stdin"`
+	}
+	if err := a.Options.Decode(&narrow); err == nil || !strings.Contains(err.Error(), "image_args") {
+		t.Errorf("unknown option accepted: %v", err)
+	}
+	if c.Defaults.Agent != "a" || c.Defaults.Mode != agent.ModeAsk {
+		t.Errorf("defaults = %+v", c.Defaults)
+	}
+}
+
+func TestProviderOptions(t *testing.T) {
+	c, err := Parse([]byte(base+"agents: {a: {type: t, command: c}}\ntranscriber: {type: http, base_url: u, model: m}\n"), "/tmp/c.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var o struct {
+		BaseURL string `yaml:"base_url"`
+		Model   string `yaml:"model"`
+	}
+	if c.Transcriber.Type != "http" || c.Transcriber.Options.Decode(&o) != nil || o.BaseURL != "u" {
+		t.Errorf("transcriber = %+v %+v", c.Transcriber, o)
+	}
+	if c.TTS.Type != "none" {
+		t.Errorf("tts default = %q", c.TTS.Type)
 	}
 }

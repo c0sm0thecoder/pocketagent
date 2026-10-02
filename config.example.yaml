@@ -1,29 +1,52 @@
-# pocketagent config. Copy to ~/.pocketagent/config.yaml (or run `pocketagent init`).
-# ${VAR} is replaced with the environment variable VAR, so secrets can stay out of this file.
+# pocketagent config. `pocketagent init` writes one for you; this file
+# documents every option. Copy it to ~/.pocketagent/config.yaml to start
+# from here instead.
+#
+# ${VAR} is replaced with the environment variable VAR, so secrets can stay
+# out of this file.
 
 telegram:
   token: ${TELEGRAM_BOT_TOKEN}       # from @BotFather
-  allowed_users: [123456789]         # numeric user ids; message @userinfobot to get yours
+  allowed_users: [123456789]         # numeric user ids allowed to use the bot
 
 defaults:
-  agent: claude
+  agent: aider                       # optional; the first agent by name otherwise
   cwd: ~/projects
-  mode: ask                          # ask | edits | plan | yolo
+  mode: ask                          # ask | edits | plan | full
 
-# Tool kinds approved without asking (in every mode except when the agent
-# itself prompts): read, search, think, fetch, edit, execute, delete, move, other
-auto_allow: [read, search, think]
-approval_timeout: 10m
+permissions:
+  # Tool kinds that run without asking:
+  # read, search, think, fetch, edit, move (execute and delete always ask
+  # unless the mode is full).
+  auto_allow: [read, search, think]
+  timeout: 10m                       # unanswered approvals are denied
 
-# Three agent types:
-#   claude:  the Claude Code CLI driven directly (fastest, reports cost)
-#   acp:     any Agent Client Protocol agent; approvals, images and models come
-#            through the protocol. Models are discovered from the agent too.
-#   command: any CLI that takes a prompt and prints a reply.
-# Optional on every agent: model (default), models (picker list), env, wrap.
+# Agents. Keep the ones installed on your machine.
+#
+# Every agent has:
+#   type     the adapter: acp | claude-code | command
+#   command  the program to run (a string or a list)
+#   model    default model (optional)
+#   models   models offered in the /model picker (optional)
+#   env      extra environment, as KEY=VALUE (optional)
+#   wrap     a prefix for command, e.g. a container runner; {cwd} is the
+#            working directory (optional, see docs/sandbox.md)
+# plus options of its adapter:
+#   acp:         modes (map of pocketagent mode to the agent's mode ids),
+#                idle_timeout
+#   command:     model_args, image_args, stdin, timeout; the command may
+#                use {prompt}, {cwd} and {model}
+#   claude-code: none
 agents:
-  claude:
-    type: claude
+  aider:
+    type: command
+    command: [aider, --message, "{prompt}", --yes-always, --no-pretty, --no-stream]
+    model_args: [--model, "{model}"]
+    image_args: ["{path}"]
+    timeout: 30m
+
+  claude-code:
+    type: claude-code
     command: claude
     models: [opus, sonnet, haiku]
 
@@ -31,69 +54,84 @@ agents:
     type: acp
     command: [npx, -y, "@zed-industries/codex-acp"]
 
-  # gemini:
-  #   type: acp
-  #   command: [gemini, --acp]
-  # kiro:
-  #   type: acp
-  #   command: [kiro-cli, acp]
-  # goose:
-  #   type: acp
-  #   command: [goose, acp]
-  # opencode:
-  #   type: acp
-  #   command: [opencode, acp]
-  # copilot:
-  #   type: acp
-  #   command: [copilot, --acp, --stdio]
-  # claude-acp:                      # Claude Code through ACP instead of natively
-  #   type: acp
-  #   command: [npx, -y, "@agentclientprotocol/claude-agent-acp"]
+  copilot:
+    type: acp
+    command: [copilot, --acp, --stdio]
 
-  # aider:
-  #   type: command
-  #   command: [aider, --message, "{prompt}", --yes-always, --no-pretty, --no-stream]
-  #   model_args: [--model, "{model}"]   # added when a model is chosen
-  #   image_args: ["{path}"]             # added once per attached image
-  #   models: [sonnet, gpt-5, deepseek]
-  #   timeout: 30m
-  # my-script:
-  #   type: command
-  #   command: [./ask.sh]
-  #   stdin: true                        # prompt on stdin instead of {prompt}
+  cursor:
+    type: acp
+    command: [cursor-agent, acp]
 
-  # Sandbox any agent by wrapping its command, e.g. in Docker (see docs/sandbox.md):
-  #   wrap: [docker, run, --rm, -i, -v, "{cwd}:{cwd}", -w, "{cwd}", my-agent-image]
+  gemini:
+    type: acp
+    command: [gemini, --acp]
+
+  goose:
+    type: acp
+    command: [goose, acp]
+
+  kiro:
+    type: acp
+    command: [kiro-cli, acp]
+
+  opencode:
+    type: acp
+    command: [opencode, acp]
+
+  # Any other ACP agent, with its mode ids mapped explicitly:
+  # my-agent:
+  #   type: acp
+  #   command: [my-agent, --acp]
+  #   modes: {edits: [auto-edit], full: [unrestricted]}
 
 # Named workspaces, switchable with /project.
 projects:
-  pocketagent:
-    cwd: ~/projects/pocketagent
-  # api: { cwd: ~/work/api, agent: codex, model: gpt-5, mode: edits }
+  website:
+    cwd: ~/projects/website
+  # api: { cwd: ~/work/api, agent: gemini, model: some-model, mode: edits }
 
+# Voice messages. type: whisper-cpp | http | command | none
 transcriber:
-  type: whisper-cpp                  # whisper-cpp | openai | command | none
+  type: whisper-cpp                  # local and private
   model: ~/.pocketagent/models/ggml-small.bin
   language: auto
-  # OpenAI-compatible (OpenAI, Groq, a local faster-whisper server, ...):
-  # type: openai
-  # base_url: https://api.groq.com/openai/v1
-  # api_key: ${GROQ_API_KEY}
-  # model: whisper-large-v3-turbo
+  # binary: whisper-cli
+  # ffmpeg: ffmpeg
+  #
+  # Any service with an OpenAI-compatible /audio/transcriptions endpoint
+  # (hosted or self-hosted):
+  # type: http
+  # base_url: https://transcription.example.com/v1
+  # api_key: ${TRANSCRIPTION_API_KEY}
+  # model: whisper-large-v3
+  #
+  # Any program that prints a transcript; {file} is the audio file:
+  # type: command
+  # command: [my-stt, "{file}"]
 
+# Spoken replies, toggled with /voice. type: say | http | command | none
 tts:
-  type: none                         # say (macOS) | openai | command | none
-  # type: openai
-  # api_key: ${OPENAI_API_KEY}
-  # model: gpt-4o-mini-tts
-  # voice: alloy
+  type: none
+  # type: say                        # macOS
+  # voice: Samantha
+  #
+  # Any service with an OpenAI-compatible /audio/speech endpoint:
+  # type: http
+  # base_url: https://speech.example.com/v1
+  # api_key: ${SPEECH_API_KEY}
+  # model: some-tts-model
+  # voice: some-voice
+  #
+  # Any program; {text_file} is the input, {out} the audio file it writes:
+  # type: command
+  # command: [my-tts, "{text_file}", "{out}"]
 
 budget:
   daily_usd: 0                       # per user; 0 = unlimited
 
 output:
-  file_threshold: 8000               # replies longer than this are sent as a .md file
+  file_threshold: 8000               # longer replies are sent as a file
 
 checkpoints: true                    # git snapshot before each turn, for /diff and /undo
 
-# bridge_host: host.docker.internal  # only when agents run in containers (docs/sandbox.md)
+# bridge_host: host.docker.internal  # only when agents run in containers

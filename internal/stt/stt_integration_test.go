@@ -19,7 +19,7 @@ func TestSayThenWhisper(t *testing.T) {
 	if _, err := os.Stat(model); err != nil {
 		t.Skip("no whisper model at " + model)
 	}
-	sp, _ := tts.New(config.TTS{Type: "say", FFmpeg: "ffmpeg"})
+	sp, _ := tts.NewSay(config.OptionsFrom(map[string]any{}))
 	ogg, err := sp.Speak(context.Background(), "Please list the files in this directory.")
 	if err != nil {
 		t.Skipf("say: %v", err)
@@ -27,7 +27,10 @@ func TestSayThenWhisper(t *testing.T) {
 	p := t.TempDir() + "/voice.oga"
 	os.WriteFile(p, ogg, 0o600)
 
-	tr, _ := New(config.Transcriber{Type: "whisper-cpp", Model: model, Language: "auto", FFmpeg: "ffmpeg"})
+	tr, err := NewWhisperCpp(config.OptionsFrom(map[string]any{"model": model}))
+	if err != nil {
+		t.Fatal(err)
+	}
 	got, err := tr.Transcribe(context.Background(), p)
 	if err != nil {
 		t.Fatal(err)

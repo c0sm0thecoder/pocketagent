@@ -20,8 +20,7 @@ type Conversation struct {
 	AlwaysAllow []string `json:"always_allow,omitempty"`
 	Voice       bool     `json:"voice,omitempty"`
 
-	SessionCost float64 `json:"session_cost_usd,omitempty"` // cumulative, for agents that report totals
-	TotalCost   float64 `json:"total_cost_usd,omitempty"`
+	TotalCost float64 `json:"total_cost_usd,omitempty"`
 
 	Sessions    []SessionRecord `json:"sessions,omitempty"`
 	Checkpoints []Checkpoint    `json:"checkpoints,omitempty"`

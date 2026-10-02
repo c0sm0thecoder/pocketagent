@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
 )
 
 // The agent runs inside a container that only sees the project directory.
@@ -18,17 +17,22 @@ func TestDockerWrap(t *testing.T) {
 		t.Skip("docker not running")
 	}
 	dir := t.TempDir()
-	a := New(config.Agent{
-		Wrap:    config.Command{"docker", "run", "--rm", "-i", "-v", "{cwd}:{cwd}", "-w", "{cwd}", "alpine:3"},
-		Command: config.Command{"sh", "-c", `echo "$0" > note.txt; pwd; ls /root 2>&1 | head -1; cat /etc/alpine-release`, "{prompt}"},
+	a, err := New(agent.Spec{
+		Name:    "sandboxed",
+		Wrap:    []string{"docker", "run", "--rm", "-i", "-v", "{cwd}:{cwd}", "-w", "{cwd}", "alpine:3"},
+		Command: []string{"sh", "-c", `echo "$0" > note.txt; pwd; ls /root 2>&1 | head -1; cat /etc/alpine-release`, "{prompt}"},
+		Options: agent.NoOptions{},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	res, err := a.Run(context.Background(), agent.Request{Cwd: dir, Prompt: []agent.Block{{Text: "sandboxed hello"}}}, nopHandler{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("%s", res.FinalText)
-	if !strings.Contains(res.FinalText, dir) {
-		t.Errorf("cwd not mounted: %s", res.FinalText)
+	t.Logf("%s", res.Final)
+	if !strings.Contains(res.Final, dir) {
+		t.Errorf("cwd not mounted: %s", res.Final)
 	}
 	out, _ := exec.Command("cat", dir+"/note.txt").Output()
 	if strings.TrimSpace(string(out)) != "sandboxed hello" {

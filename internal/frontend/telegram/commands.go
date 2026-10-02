@@ -4,12 +4,10 @@ import (
 	"context"
 	"fmt"
 	"html"
-	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
-	"github.com/c0sm0thecoder/pocketagent/internal/config"
 	"github.com/c0sm0thecoder/pocketagent/internal/core"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
@@ -28,14 +26,14 @@ When the agent wants to run a command or edit a file you get buttons. Reply with
 /undo: roll back the last turn's file changes
 /cwd [path] · /voice · /status · /usage`
 
-var modeHelp = map[string]string{
-	"ask":   "ask before anything that isn't read-only",
-	"edits": "file edits allowed, commands still ask",
-	"plan":  "plan only, no changes",
-	"yolo":  "allow everything (careful)",
+var modeHelp = map[agent.Mode]string{
+	agent.ModeAsk:   "ask before anything that isn't read-only",
+	agent.ModeEdits: "file edits allowed, commands still ask",
+	agent.ModePlan:  "plan only, no changes",
+	agent.ModeFull:  "allow everything (careful)",
 }
 
-func (b *Bot) handleCommand(ctx context.Context, conv core.Conv, m *models.Message) {
+func (b *Bot) handleCommand(ctx context.Context, conv core.ConvID, m *models.Message) {
 	cmd, arg, _ := strings.Cut(strings.TrimSpace(m.Text), " ")
 	cmd, _, _ = strings.Cut(cmd, "@") // "/new@MyBot" in groups
 	arg = strings.TrimSpace(arg)
@@ -128,7 +126,7 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.Conv, m *models.Messa
 		b.sendHTML(ctx, conv, b.statusText(conv), nil)
 
 	case "/usage":
-		today, month := c.Usage(m.From.ID)
+		today, month := c.Usage(userOf(m.From))
 		text := fmt.Sprintf("💸 Today: $%.4f\nLast 30 days: $%.4f", today, month)
 		if limit := b.cfg.Budget.DailyUSD; limit > 0 {
 			text += fmt.Sprintf("\nDaily budget: $%.2f", limit)
@@ -138,11 +136,11 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.Conv, m *models.Messa
 
 	default:
 		// Not ours: pass it to the agent (many agents have their own slash commands).
-		c.Submit(conv, core.Input{User: m.From.ID, Blocks: []agent.Block{{Text: m.Text}}, Text: m.Text})
+		c.Submit(conv, core.Input{User: userOf(m.From), Blocks: []agent.Block{{Text: m.Text}}, Text: m.Text})
 	}
 }
 
-func (b *Bot) statusText(conv core.Conv) string {
+func (b *Bot) statusText(conv core.ConvID) string {
 	s := b.core.Settings(conv)
 	running, queued := b.core.Running(conv)
 	session := s.SessionID
@@ -172,7 +170,7 @@ func (b *Bot) statusText(conv core.Conv) string {
 	return sb.String()
 }
 
-func (b *Bot) sendDiff(conv core.Conv, all bool) {
+func (b *Bot) sendDiff(conv core.ConvID, all bool) {
 	ctx := context.Background()
 	d, err := b.core.Diff(ctx, conv, all)
 	switch {
@@ -196,13 +194,13 @@ func (b *Bot) sendDiff(conv core.Conv, all bool) {
 
 type choice struct{ label, value string }
 
-func (b *Bot) choices(conv core.Conv, kind string) (title string, list []choice, current string) {
+func (b *Bot) choices(conv core.ConvID, kind string) (title string, list []choice, current string) {
 	c := b.core
 	s := c.Settings(conv)
 	switch kind {
 	case "agent":
-		for _, n := range c.Agents() {
-			list = append(list, choice{n + " (" + b.cfg.Agents[n].Type + ")", n})
+		for _, n := range c.AgentNames() {
+			list = append(list, choice{n + " (" + c.AgentType(n) + ")", n})
 		}
 		return "Choose an agent", list, s.Agent
 	case "model":
@@ -212,14 +210,13 @@ func (b *Bot) choices(conv core.Conv, kind string) (title string, list []choice,
 		}
 		return "Model for " + s.Agent + " (or /model <name>)", list, s.Model
 	case "mode":
-		modes := config.Modes
-		if caps := c.Caps(conv); len(caps.Modes) > 0 {
-			modes = slices.DeleteFunc(slices.Clone(modes), func(m string) bool { return !slices.Contains(caps.Modes, agent.Mode(m)) })
+		caps := c.Caps(conv)
+		for _, m := range agent.Modes {
+			if caps.SupportsMode(m) {
+				list = append(list, choice{string(m) + ": " + modeHelp[m], string(m)})
+			}
 		}
-		for _, m := range modes {
-			list = append(list, choice{m + ": " + modeHelp[m], m})
-		}
-		return "Permission mode", list, s.Mode
+		return "Permission mode", list, string(s.Mode)
 	case "project":
 		for _, n := range b.cfg.ProjectNames() {
 			list = append(list, choice{n, n})
@@ -237,7 +234,7 @@ func (b *Bot) choices(conv core.Conv, kind string) (title string, list []choice,
 
 // picker sends (or, when msg is set, edits) an inline keyboard. Buttons carry
 // the list index; the list is rebuilt on tap.
-func (b *Bot) picker(ctx context.Context, conv core.Conv, msg *models.Message, kind string) {
+func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message, kind string) {
 	title, list, current := b.choices(conv, kind)
 	if len(list) == 0 {
 		b.Notice(conv, "Nothing to choose from yet.")
@@ -257,7 +254,7 @@ func (b *Bot) picker(ctx context.Context, conv core.Conv, msg *models.Message, k
 	b.editHTML(ctx, conv, msg, "<b>"+html.EscapeString(title)+"</b>", &models.InlineKeyboardMarkup{InlineKeyboard: rows})
 }
 
-func (b *Bot) setAndReport(ctx context.Context, conv core.Conv, msg *models.Message, kind, value string) {
+func (b *Bot) setAndReport(ctx context.Context, conv core.ConvID, msg *models.Message, kind, value string) {
 	c := b.core
 	var err error
 	var text string
@@ -272,8 +269,8 @@ func (b *Bot) setAndReport(ctx context.Context, conv core.Conv, msg *models.Mess
 		}
 		text = "🧠 Model: <b>" + html.EscapeString(value) + "</b>"
 	case "mode":
-		err = c.SetMode(conv, value)
-		text = "🛡 Mode: <b>" + value + "</b>: " + modeHelp[value]
+		err = c.SetMode(conv, agent.Mode(value))
+		text = "🛡 Mode: <b>" + html.EscapeString(value) + "</b>: " + modeHelp[agent.Mode(value)]
 	case "project":
 		err = c.SetProject(conv, value)
 		if err == nil {
@@ -296,7 +293,7 @@ func (b *Bot) handleCallback(ctx context.Context, q *models.CallbackQuery) {
 	answer := func(text string) {
 		b.tg.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: q.ID, Text: text})
 	}
-	if !b.cfg.IsAllowed(q.From.ID) {
+	if !b.allowed(q.From.ID) {
 		answer("Not authorized")
 		return
 	}

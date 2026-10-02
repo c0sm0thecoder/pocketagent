@@ -1,5 +1,8 @@
 // Package telegram is the Telegram frontend: it turns updates into core
 // calls and implements core.UI.
+//
+// Conversations are identified as "<chat id>:<thread id>", so each forum
+// topic is its own conversation. Users are identified by their numeric id.
 package telegram
 
 import (
@@ -13,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,8 +39,8 @@ type Bot struct {
 }
 
 type album struct {
-	conv   core.Conv
-	user   int64
+	conv   core.ConvID
+	user   string
 	blocks []agent.Block
 	text   []string
 }
@@ -59,7 +63,7 @@ var commands = []models.BotCommand{
 	{Command: "stop", Description: "Cancel the current run and the queue"},
 	{Command: "agent", Description: "Switch coding agent"},
 	{Command: "model", Description: "Switch model"},
-	{Command: "mode", Description: "Permission mode: ask, edits, plan, yolo"},
+	{Command: "mode", Description: "Permission mode: ask, edits, plan, full"},
 	{Command: "project", Description: "Switch project"},
 	{Command: "cwd", Description: "Show or change working directory"},
 	{Command: "sessions", Description: "Resume a recent session"},
@@ -79,13 +83,31 @@ func (b *Bot) Run(ctx context.Context) {
 	b.tg.Start(ctx)
 }
 
-func convOf(m *models.Message) core.Conv {
-	c := core.Conv{ChatID: m.Chat.ID}
+func convOf(m *models.Message) core.ConvID {
+	thread := 0
 	if m.IsTopicMessage {
-		c.ThreadID = m.MessageThreadID
+		thread = m.MessageThreadID
 	}
-	return c
+	return core.ConvID(fmt.Sprintf("%d:%d", m.Chat.ID, thread))
 }
+
+// target is where a conversation's messages go.
+type target struct {
+	chat   int64
+	thread int
+}
+
+func targetOf(conv core.ConvID) target {
+	chat, thread, _ := strings.Cut(string(conv), ":")
+	var t target
+	t.chat, _ = strconv.ParseInt(chat, 10, 64)
+	t.thread, _ = strconv.Atoi(thread)
+	return t
+}
+
+func userOf(u *models.User) string { return strconv.FormatInt(u.ID, 10) }
+
+func (b *Bot) allowed(userID int64) bool { return slices.Contains(b.cfg.Telegram.AllowedUsers, userID) }
 
 // ---------- updates ----------
 
@@ -99,7 +121,7 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *bot.Bot, u *models.Update) {
 		return
 	}
 	conv := convOf(m)
-	if !b.cfg.IsAllowed(m.From.ID) {
+	if !b.allowed(m.From.ID) {
 		log.Printf("ignoring message from unauthorized user %d (@%s)", m.From.ID, m.From.Username)
 		b.Notice(conv, fmt.Sprintf("Not authorized. Your Telegram user id is %d.", m.From.ID))
 		return
@@ -109,20 +131,20 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *bot.Bot, u *models.Update) {
 	case strings.HasPrefix(m.Text, "/"):
 		b.handleCommand(ctx, conv, m)
 	case m.Voice != nil:
-		go b.handleVoice(conv, m.From.ID, m.Voice.FileID, m.Caption)
+		go b.handleVoice(conv, userOf(m.From), m.Voice.FileID, m.Caption)
 	case m.Audio != nil:
-		go b.handleVoice(conv, m.From.ID, m.Audio.FileID, m.Caption)
+		go b.handleVoice(conv, userOf(m.From), m.Audio.FileID, m.Caption)
 	case len(m.Photo) > 0 || m.Document != nil:
 		go b.handleAttachment(conv, m)
 	case m.Text != "":
-		b.core.Submit(conv, core.Input{User: m.From.ID, Blocks: []agent.Block{{Text: m.Text}}, Text: m.Text})
+		b.core.Submit(conv, core.Input{User: userOf(m.From), Blocks: []agent.Block{{Text: m.Text}}, Text: m.Text})
 	}
 }
 
-func (b *Bot) handleVoice(conv core.Conv, user int64, fileID, caption string) {
+func (b *Bot) handleVoice(conv core.ConvID, user, fileID, caption string) {
 	ctx := context.Background()
-	if b.core.STT == nil {
-		b.Notice(conv, "🎙 Voice messages are off. Set a transcriber in the config (see `pocketagent doctor`).")
+	if b.core.Transcriber == nil {
+		b.Notice(conv, "🎙 Voice messages are off. Configure a transcriber (see `pocketagent doctor`).")
 		return
 	}
 	status := b.sendHTML(ctx, conv, "🎙 Transcribing…", nil)
@@ -131,7 +153,7 @@ func (b *Bot) handleVoice(conv core.Conv, user int64, fileID, caption string) {
 	if err == nil {
 		tmp := filepath.Join(os.TempDir(), "pocketagent-voice-"+fmt.Sprint(time.Now().UnixNano())+filepath.Ext(name))
 		if err = os.WriteFile(tmp, data, 0o600); err == nil {
-			text, err = b.core.STT.Transcribe(ctx, tmp)
+			text, err = b.core.Transcriber.Transcribe(ctx, tmp)
 			os.Remove(tmp)
 		}
 	}
@@ -148,7 +170,7 @@ func (b *Bot) handleVoice(conv core.Conv, user int64, fileID, caption string) {
 
 var imageTypes = []string{"image/jpeg", "image/png", "image/gif", "image/webp"}
 
-func (b *Bot) handleAttachment(conv core.Conv, m *models.Message) {
+func (b *Bot) handleAttachment(conv core.ConvID, m *models.Message) {
 	ctx := context.Background()
 	var fileID, origName string
 	if len(m.Photo) > 0 {
@@ -185,7 +207,7 @@ func (b *Bot) handleAttachment(conv core.Conv, m *models.Message) {
 		b.mu.Lock()
 		al, exists := b.albums[m.MediaGroupID]
 		if !exists {
-			al = &album{conv: conv, user: m.From.ID}
+			al = &album{conv: conv, user: userOf(m.From)}
 			b.albums[m.MediaGroupID] = al
 		}
 		al.blocks = append(al.blocks, block)
@@ -204,10 +226,10 @@ func (b *Bot) handleAttachment(conv core.Conv, m *models.Message) {
 		}
 		return
 	}
-	b.submitWithCaption(conv, m.From.ID, []agent.Block{block}, m.Caption)
+	b.submitWithCaption(conv, userOf(m.From), []agent.Block{block}, m.Caption)
 }
 
-func (b *Bot) submitWithCaption(conv core.Conv, user int64, blocks []agent.Block, caption string) {
+func (b *Bot) submitWithCaption(conv core.ConvID, user string, blocks []agent.Block, caption string) {
 	if caption != "" {
 		blocks = append(blocks, agent.Block{Text: caption})
 	}
@@ -234,7 +256,7 @@ func (b *Bot) download(ctx context.Context, fileID string) ([]byte, string, erro
 
 // ---------- core.UI ----------
 
-func (b *Bot) Reply(conv core.Conv, md string) {
+func (b *Bot) Reply(conv core.ConvID, md string) {
 	ctx := context.Background()
 	if len(md) > b.cfg.Output.FileThreshold {
 		preview := md
@@ -248,18 +270,18 @@ func (b *Bot) Reply(conv core.Conv, md string) {
 	b.sendMarkdown(ctx, conv, md)
 }
 
-func (b *Bot) Notice(conv core.Conv, text string) {
+func (b *Bot) Notice(conv core.ConvID, text string) {
 	b.sendPlain(context.Background(), conv, text)
 }
 
-func (b *Bot) SendFile(ctx context.Context, conv core.Conv, path, caption string) error {
+func (b *Bot) SendFile(ctx context.Context, conv core.ConvID, path, caption string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 	if slices.Contains([]string{".png", ".jpg", ".jpeg", ".gif", ".webp"}, strings.ToLower(filepath.Ext(path))) {
 		_, err = b.tg.SendPhoto(ctx, &bot.SendPhotoParams{
-			ChatID: conv.ChatID, MessageThreadID: conv.ThreadID, Caption: caption,
+			ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Caption: caption,
 			Photo: &models.InputFileUpload{Filename: filepath.Base(path), Data: bytes.NewReader(data)},
 		})
 		if err == nil {
@@ -270,9 +292,9 @@ func (b *Bot) SendFile(ctx context.Context, conv core.Conv, path, caption string
 	return b.sendDocument(ctx, conv, filepath.Base(path), data, caption)
 }
 
-func (b *Bot) SendVoice(ctx context.Context, conv core.Conv, ogg []byte) error {
+func (b *Bot) SendVoice(ctx context.Context, conv core.ConvID, ogg []byte) error {
 	_, err := b.tg.SendVoice(ctx, &bot.SendVoiceParams{
-		ChatID: conv.ChatID, MessageThreadID: conv.ThreadID,
+		ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread,
 		Voice: &models.InputFileUpload{Filename: "reply.ogg", Data: bytes.NewReader(ogg)},
 	})
 	return err
@@ -281,7 +303,7 @@ func (b *Bot) SendVoice(ctx context.Context, conv core.Conv, ogg []byte) error {
 // progress shows tool calls in one message that is edited as work goes on.
 type progress struct {
 	b        *Bot
-	conv     core.Conv
+	conv     core.ConvID
 	stop     chan struct{}
 	mu       sync.Mutex
 	msg      *models.Message
@@ -289,14 +311,14 @@ type progress struct {
 	lastEdit time.Time
 }
 
-func (b *Bot) Progress(conv core.Conv) core.Progress {
+func (b *Bot) StartProgress(conv core.ConvID) core.Progress {
 	p := &progress{b: b, conv: conv, stop: make(chan struct{})}
 	go func() { // keep "typing…" visible while the agent works
 		t := time.NewTicker(4 * time.Second)
 		defer t.Stop()
 		for {
 			b.tg.SendChatAction(context.Background(), &bot.SendChatActionParams{
-				ChatID: conv.ChatID, MessageThreadID: conv.ThreadID, Action: models.ChatActionTyping,
+				ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Action: models.ChatActionTyping,
 			})
 			select {
 			case <-p.stop:
@@ -324,7 +346,7 @@ func (p *progress) render(footer string) string {
 	return strings.TrimRight(sb.String(), "\n")
 }
 
-func (p *progress) Tool(title string) {
+func (p *progress) ToolCall(title string) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if len(title) > 150 {
@@ -364,20 +386,20 @@ func (p *progress) Done(summary string) {
 		return
 	}
 	p.b.tg.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: p.conv.ChatID, MessageThreadID: p.conv.ThreadID, DisableNotification: true,
+		ChatID: targetOf(p.conv).chat, MessageThreadID: targetOf(p.conv).thread, DisableNotification: true,
 		Text: "<i>" + html.EscapeString(summary) + "</i>", ParseMode: models.ParseModeHTML,
 	})
 }
 
 type approvalView struct {
 	b    *Bot
-	conv core.Conv
+	conv core.ConvID
 	id   string
 	msg  *models.Message
 	text string
 }
 
-func (b *Bot) ShowApproval(conv core.Conv, id string, p agent.Permission) core.ApprovalView {
+func (b *Bot) AskApproval(conv core.ConvID, id string, p agent.Permission) core.Approval {
 	text := "🔐 <b>" + html.EscapeString(p.Tool) + "</b>"
 	if p.Title != "" && p.Title != p.Tool {
 		text += "\n" + html.EscapeString(p.Title)
@@ -426,32 +448,32 @@ func (v *approvalView) Resolve(outcome string) {
 
 // ---------- sending ----------
 
-func (b *Bot) sendHTML(ctx context.Context, conv core.Conv, text string, markup models.ReplyMarkup) *models.Message {
+func (b *Bot) sendHTML(ctx context.Context, conv core.ConvID, text string, markup models.ReplyMarkup) *models.Message {
 	msg, err := b.tg.SendMessage(ctx, &bot.SendMessageParams{
-		ChatID: conv.ChatID, MessageThreadID: conv.ThreadID, Text: text, ParseMode: models.ParseModeHTML,
+		ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Text: text, ParseMode: models.ParseModeHTML,
 		ReplyMarkup: markup, LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
 	if err != nil {
-		log.Printf("send to %s: %v", conv.Key(), err)
+		log.Printf("send to %s: %v", conv, err)
 	}
 	return msg
 }
 
-func (b *Bot) editHTML(ctx context.Context, conv core.Conv, msg *models.Message, text string, markup models.ReplyMarkup) {
+func (b *Bot) editHTML(ctx context.Context, conv core.ConvID, msg *models.Message, text string, markup models.ReplyMarkup) {
 	if msg == nil {
 		b.sendHTML(ctx, conv, text, markup)
 		return
 	}
 	b.tg.EditMessageText(ctx, &bot.EditMessageTextParams{
-		ChatID: conv.ChatID, MessageID: msg.ID, Text: text, ParseMode: models.ParseModeHTML, ReplyMarkup: markup,
+		ChatID: targetOf(conv).chat, MessageID: msg.ID, Text: text, ParseMode: models.ParseModeHTML, ReplyMarkup: markup,
 		LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
 }
 
-func (b *Bot) sendMarkdown(ctx context.Context, conv core.Conv, md string) {
+func (b *Bot) sendMarkdown(ctx context.Context, conv core.ConvID, md string) {
 	for _, chunk := range splitMarkdown(md) {
 		_, err := b.tg.SendMessage(ctx, &bot.SendMessageParams{
-			ChatID: conv.ChatID, MessageThreadID: conv.ThreadID,
+			ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread,
 			Text: markdownToHTML(chunk), ParseMode: models.ParseModeHTML,
 			LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
 		})
@@ -462,17 +484,17 @@ func (b *Bot) sendMarkdown(ctx context.Context, conv core.Conv, md string) {
 	}
 }
 
-func (b *Bot) sendPlain(ctx context.Context, conv core.Conv, text string) {
+func (b *Bot) sendPlain(ctx context.Context, conv core.ConvID, text string) {
 	for _, chunk := range splitMarkdown(text) {
-		if _, err := b.tg.SendMessage(ctx, &bot.SendMessageParams{ChatID: conv.ChatID, MessageThreadID: conv.ThreadID, Text: chunk}); err != nil {
-			log.Printf("send to %s: %v", conv.Key(), err)
+		if _, err := b.tg.SendMessage(ctx, &bot.SendMessageParams{ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Text: chunk}); err != nil {
+			log.Printf("send to %s: %v", conv, err)
 		}
 	}
 }
 
-func (b *Bot) sendDocument(ctx context.Context, conv core.Conv, name string, data []byte, caption string) error {
+func (b *Bot) sendDocument(ctx context.Context, conv core.ConvID, name string, data []byte, caption string) error {
 	_, err := b.tg.SendDocument(ctx, &bot.SendDocumentParams{
-		ChatID: conv.ChatID, MessageThreadID: conv.ThreadID, Caption: caption,
+		ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Caption: caption,
 		Document: &models.InputFileUpload{Filename: name, Data: bytes.NewReader(data)},
 	})
 	return err

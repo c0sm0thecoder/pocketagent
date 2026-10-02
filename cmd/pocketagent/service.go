@@ -41,7 +41,7 @@ func launchdTarget() string { return "gui/" + strconv.Itoa(os.Getuid()) }
 
 // serviceInstall registers pocketagent to start at login and restart if it
 // crashes. The current PATH is baked in: service managers start with a
-// minimal PATH that would not find claude, npx, whisper-cli or ffmpeg.
+// minimal PATH that would not find agent CLIs, npx, whisper-cli or ffmpeg.
 func serviceInstall(cfgPath, home string) error {
 	if pid := runningPID(home); pid != 0 && !serviceInstalled() {
 		fmt.Println("stopping the background instance first")

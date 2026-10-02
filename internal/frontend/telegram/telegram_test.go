@@ -113,10 +113,9 @@ type scripted struct {
 }
 
 func (s *scripted) Caps() agent.Caps {
-	return agent.Caps{Images: true, Modes: []agent.Mode{agent.ModeAsk, agent.ModeYolo}}
+	return agent.Caps{Images: true, Modes: []agent.Mode{agent.ModeAsk, agent.ModeFull}}
 }
 func (s *scripted) Models(string) []string { return s.models }
-func (s *scripted) Close()                 {}
 func (s *scripted) Run(ctx context.Context, req agent.Request, h agent.Handler) (agent.Result, error) {
 	s.mu.Lock()
 	run := s.run
@@ -134,18 +133,17 @@ func setup(t *testing.T) (*Bot, *fakeAPI, map[string]*scripted) {
 
 	home := t.TempDir()
 	cfg := &config.Config{
-		Home:            home,
-		Telegram:        config.Telegram{Token: "1:x", AllowedUsers: []int64{owner}},
-		Defaults:        config.Defaults{Agent: "alpha", Cwd: home, Mode: "ask"},
-		AutoAllow:       []string{"read"},
-		ApprovalTimeout: config.Duration(5 * time.Second),
-		Agents:          map[string]config.Agent{"alpha": {Type: "command"}, "beta": {Type: "acp"}},
-		Output:          config.Output{FileThreshold: 200},
+		Home:        home,
+		Telegram:    config.Telegram{Token: "1:x", AllowedUsers: []int64{owner}},
+		Defaults:    config.Defaults{Agent: "alpha", Cwd: home, Mode: agent.ModeAsk},
+		Permissions: config.Permissions{AutoAllow: []agent.Kind{agent.KindRead}, Timeout: config.Duration(5 * time.Second)},
+		Agents:      map[string]config.Agent{"alpha": {Type: "command", Models: []string{"m1", "m2"}}, "beta": {Type: "acp"}},
+		Output:      config.Output{FileThreshold: 200},
 	}
 	agents := map[string]*scripted{"alpha": {models: []string{"m1", "m2"}}, "beta": {}}
 	echo := func(name string) func(context.Context, agent.Request, agent.Handler) (agent.Result, error) {
 		return func(_ context.Context, req agent.Request, h agent.Handler) (agent.Result, error) {
-			h.Text(name + " got: " + req.Prompt[0].Text)
+			h.Message(name + " got: " + req.Prompt[0].Text)
 			return agent.Result{}, nil
 		}
 	}
@@ -160,7 +158,7 @@ func setup(t *testing.T) (*Bot, *fakeAPI, map[string]*scripted) {
 	for k, v := range agents {
 		as[k] = v
 	}
-	c := core.New(cfg, st, as, br, nil, nil)
+	c := core.New(core.Deps{Config: cfg, Agents: as, Store: st, Tools: br})
 	b, err := New(cfg, c, bot.WithServerURL(srv.URL), bot.WithSkipGetMe())
 	if err != nil {
 		t.Fatal(err)
@@ -263,7 +261,7 @@ func TestApprovalButtons(t *testing.T) {
 func TestLongReplyBecomesFile(t *testing.T) {
 	b, api, agents := setup(t)
 	agents["alpha"].run = func(_ context.Context, _ agent.Request, h agent.Handler) (agent.Result, error) {
-		h.Text(strings.Repeat("long line of output\n", 50))
+		h.Message(strings.Repeat("long line of output\n", 50))
 		return agent.Result{}, nil
 	}
 	b.handleUpdate(context.Background(), nil, message(owner, 0, "go"))
@@ -277,7 +275,7 @@ func TestQueueNotice(t *testing.T) {
 	release := make(chan struct{})
 	agents["alpha"].run = func(_ context.Context, req agent.Request, h agent.Handler) (agent.Result, error) {
 		<-release
-		h.Text("done " + req.Prompt[0].Text)
+		h.Message("done " + req.Prompt[0].Text)
 		return agent.Result{}, nil
 	}
 	ctx := context.Background()
