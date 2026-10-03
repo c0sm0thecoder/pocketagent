@@ -34,7 +34,11 @@ func run(cfgPath string) error {
 	if err != nil {
 		return err
 	}
-	defer lock.Close()
+	defer func() {
+		if err := lock.Close(); err != nil {
+			log.Printf("release instance lock: %v", err)
+		}
+	}()
 
 	st, err := store.Open(filepath.Join(cfg.Home, "state.json"))
 	if err != nil {

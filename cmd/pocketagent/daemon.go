@@ -24,24 +24,22 @@ func lockInstance(home string) (*os.File, error) {
 		return nil, err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		f.Close()
-		return nil, errors.New("pocketagent is already running (see `pocketagent status`)")
+		return nil, errors.Join(errors.New("pocketagent is already running (see `pocketagent status`)"), f.Close())
 	}
 	// The lock file also records the pid, for status and stop.
 	if err := f.Truncate(0); err != nil {
-		f.Close()
-		return nil, err
+		return nil, errors.Join(err, f.Close())
 	}
 	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
-		f.Close()
-		return nil, err
+		return nil, errors.Join(err, f.Close())
 	}
 	return f, nil
 }
 
 // runningPID returns the pid of the running bot, or 0.
 func runningPID(home string) int {
-	f, err := os.OpenFile(lockPath(home), os.O_RDWR, 0o600)
+	// Read-only is enough to test the lock.
+	f, err := os.Open(lockPath(home))
 	if err != nil {
 		return 0
 	}
@@ -75,11 +73,15 @@ func start(cfgPath, home string) error {
 	if err != nil {
 		return err
 	}
-	defer logf.Close()
 	cmd := exec.CommandContext(context.Background(), exe, "run", "--config", cfgPath)
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // survive the terminal closing
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	// The child has its own copy of the log file; ours can go.
+	if cerr := logf.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return err
 	}
 	if err := cmd.Process.Release(); err != nil {
