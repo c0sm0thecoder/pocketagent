@@ -1,4 +1,0 @@
-#!/usr/bin/env bash
-# tgbot: shorthand for pocketagent's background commands.
-#   tgbot start|stop|restart|status|logs
-exec pocketagent "${@:-status}"

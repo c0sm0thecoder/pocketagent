@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Fast checks on every commit. Bypass in an emergency with --no-verify.
+set -euo pipefail
+echo "pre-commit: scanning staged changes for secrets"
+make -s secrets-staged
+echo "pre-commit: lint"
+make -s lint

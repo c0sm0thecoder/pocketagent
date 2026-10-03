@@ -40,14 +40,38 @@ internal/term              terminal output cleanup
 
 Write a `func(Options) (Transcriber, error)` (or `Speaker`) in `internal/stt` or `internal/tts`. Implement `Check() error` if it needs local tools, and register it in `internal/registry`.
 
+## Development workflow
+
+```sh
+make hooks     # once: pre-commit (secret scan, lint) and pre-push (full gate)
+make check     # everything CI runs, in about 30 seconds
+make help      # all targets
+```
+
+`make check` is the single definition of "green", used by the git hooks, CI and the release workflow:
+
+| target | what it guards against |
+|---|---|
+| `lint` | bugs and security problems (golangci-lint with gosec, errcheck, errorlint, staticcheck, ...) and broken workflows (actionlint) |
+| `vet` | suspicious code, including the integration tests |
+| `cover` | regressions, with coverage thresholds: internal/ total at least 78%, every internal package at least 60% (packages without tests count as 0%) |
+| `vuln` | known vulnerabilities in code we actually call, including the Go standard library (govulncheck) |
+| `secrets` | credentials anywhere in the git history (gitleaks) |
+| `tidy` | go.mod/go.sum drift, for the module and each tool |
+| `build` | every release target still compiles |
+
+Tool versions are pinned in `tools/<name>/go.mod` and run with `go tool`, so everyone, CI included, uses the same versions. Dependabot keeps them, the Go modules, the GitHub Actions (pinned by commit SHA) and the Docker base images up to date.
+
+CI adds CodeQL, dependency review on pull requests, hadolint for the Dockerfiles, and an OpenSSF Scorecard.
+
 ## Tests
 
 ```sh
-go test -race ./...                 # must pass; no network or agents needed
-go test -tags integration ./...     # real agents; needs them installed and logged in
+make test                           # unit tests, race detector on
+make integration                    # real agents, whisper and Docker; costs a few cents
 ```
 
-The core runs against in-memory fakes, the frontend against a fake Bot API, and the bridge against a real MCP client. Please add tests next to your change.
+The core runs against in-memory fakes, the Telegram frontend against a fake Bot API, the bridge against a real MCP client, and the ACP and Claude Code adapters against fake agents (the test binary re-runs itself as the agent). Please add tests next to your change.
 
 ## Style
 

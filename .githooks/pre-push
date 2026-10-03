@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# The full gate before anything leaves this machine.
+set -euo pipefail
+echo "pre-push: make check"
+make -s check
