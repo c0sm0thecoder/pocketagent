@@ -18,3 +18,10 @@ updates:
     directories: ["/", "/sandbox"]
     schedule:
       interval: weekly
+    ignore:
+      # The Go image follows go.mod's toolchain, which is upgraded on purpose.
+      - dependency-name: golang
+        update-types: ["version-update:semver-minor"]
+      # Node is kept on the current LTS line; majors are adopted deliberately.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

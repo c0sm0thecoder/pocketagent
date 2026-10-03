@@ -3,19 +3,27 @@
 
 TOOL = go tool -modfile=tools/$(1)/go.mod $(1)
 
-.PHONY: help check fmt lint vet test cover vuln secrets secrets-staged tidy build integration hooks clean
+.PHONY: help check fmt lint dockerlint vet test cover vuln secrets secrets-staged tidy build integration hooks clean
+
+# Linters that aren't Go programs; required so local runs match CI.
+need = @command -v $(1) >/dev/null || { echo "$(1) is required: brew install $(1) (or your package manager)"; exit 1; }
 
 help: ## list targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*## "}{printf "  %-16s %s\n", $$1, $$2}'
 
-check: lint vet cover vuln secrets tidy build ## everything CI runs
+check: lint dockerlint vet cover vuln secrets tidy build ## everything CI runs
 
 fmt: ## format code
 	$(call TOOL,golangci-lint) fmt ./...
 
 lint: ## static analysis, security lint, workflow lint
+	$(call need,shellcheck)
 	$(call TOOL,golangci-lint) run ./...
 	$(call TOOL,actionlint)
+
+dockerlint: ## Dockerfile lint
+	$(call need,hadolint)
+	hadolint Dockerfile sandbox/Dockerfile
 
 vet:
 	go vet ./... && go vet -tags integration ./...

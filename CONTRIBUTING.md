@@ -43,6 +43,7 @@ Write a `func(Options) (Transcriber, error)` (or `Speaker`) in `internal/stt` or
 ## Development workflow
 
 ```sh
+brew install shellcheck hadolint   # once (or your package manager)
 make hooks     # once: pre-commit (secret scan, lint) and pre-push (full gate)
 make check     # everything CI runs, in about 30 seconds
 make help      # all targets
@@ -52,7 +53,8 @@ make help      # all targets
 
 | target | what it guards against |
 |---|---|
-| `lint` | bugs and security problems (golangci-lint with gosec, errcheck, errorlint, staticcheck, ...) and broken workflows (actionlint) |
+| `lint` | bugs and security problems (golangci-lint with gosec, errcheck, errorlint, staticcheck, ...) and broken workflows (actionlint with shellcheck) |
+| `dockerlint` | Dockerfile problems (hadolint) |
 | `vet` | suspicious code, including the integration tests |
 | `cover` | regressions, with coverage thresholds: internal/ total at least 78%, every internal package at least 60% (packages without tests count as 0%) |
 | `vuln` | known vulnerabilities in code we actually call, including the Go standard library (govulncheck) |
@@ -62,7 +64,7 @@ make help      # all targets
 
 Tool versions are pinned in `tools/<name>/go.mod` and run with `go tool`, so everyone, CI included, uses the same versions. Dependabot keeps them, the Go modules, the GitHub Actions (pinned by commit SHA) and the Docker base images up to date.
 
-CI adds CodeQL, dependency review on pull requests, hadolint for the Dockerfiles, and an OpenSSF Scorecard.
+CI adds CodeQL, dependency review on pull requests, a build of both container images, and an OpenSSF Scorecard.
 
 ## Tests
 

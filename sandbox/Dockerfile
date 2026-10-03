@@ -5,7 +5,7 @@
 #   docker build -t pocketagent-sandbox sandbox/
 #
 # See docs/sandbox.md for the matching config.
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep python3 build-essential \
@@ -18,5 +18,5 @@ RUN npm install -g $AGENT_PACKAGES
 # Run as an unprivileged user; some agents refuse full-access modes as root.
 # node images already have uid 1000 ("node"); rename it.
 RUN usermod -l agent -d /home/agent -m node && groupmod -n agent node
-USER agent
+USER 1000
 RUN git config --global user.name "pocketagent sandbox" && git config --global user.email "sandbox@localhost"

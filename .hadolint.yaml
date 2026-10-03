@@ -1,0 +1,8 @@
+ignored:
+  # Debian package versions change with every security update; pinning them
+  # breaks builds without making them safer. The base image is pinned and
+  # kept current by Dependabot.
+  - DL3008
+  # AGENT_PACKAGES is meant to be overridden; agent CLIs move fast and their
+  # latest release is what users expect.
+  - DL3016
