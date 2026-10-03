@@ -1,0 +1,7 @@
+# Advisories for modules listed in this go.mod that do not affect the
+# gitleaks binary. Each entry must say why; `make vuln` runs govulncheck on
+# the built binary, which is the authoritative check.
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "Blanket advisory for golang.org/x/crypto/openpgp, which has no fixed version. gitleaks never imports openpgp; govulncheck -mode=binary on the gitleaks binary reports no vulnerabilities."
