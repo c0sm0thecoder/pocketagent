@@ -23,7 +23,7 @@ func TestHTTP(t *testing.T) {
 		var body map[string]string
 		json.NewDecoder(r.Body).Decode(&body)
 		if r.URL.Path != "/audio/speech" || body["response_format"] != "opus" || body["input"] != "hi" || body["voice"] != "v" {
-			http.Error(w, "bad", 400)
+			http.Error(w, "bad", http.StatusBadRequest)
 			return
 		}
 		w.Write([]byte("OggS..."))

@@ -15,12 +15,12 @@ import (
 func TestHTTP(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/audio/transcriptions" || r.Header.Get("Authorization") != "Bearer k" {
-			http.Error(w, "bad request "+r.URL.Path, 400)
+			http.Error(w, "bad request "+r.URL.Path, http.StatusBadRequest)
 			return
 		}
 		f, hdr, err := r.FormFile("file")
 		if err != nil || r.FormValue("model") != "m" || filepath.Ext(hdr.Filename) != ".ogg" {
-			http.Error(w, "bad form", 400)
+			http.Error(w, "bad form", http.StatusBadRequest)
 			return
 		}
 		data, _ := io.ReadAll(f)

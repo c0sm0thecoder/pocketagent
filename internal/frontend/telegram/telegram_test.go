@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
+
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
 	"github.com/c0sm0thecoder/pocketagent/internal/bridge"
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
 	"github.com/c0sm0thecoder/pocketagent/internal/core"
 	"github.com/c0sm0thecoder/pocketagent/internal/store"
-	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 )
 
 // call is one Bot API request the frontend made.
@@ -34,7 +35,18 @@ type fakeAPI struct {
 	ch    chan call
 }
 
+// pngHeader makes downloaded files sniff as image/png.
+const pngHeader = "\x89PNG\r\n\x1a\n"
+
 func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.URL.Path, "/file/") { // file downloads
+		if strings.HasSuffix(r.URL.Path, ".png") {
+			w.Write([]byte(pngHeader + "image-bytes"))
+		} else {
+			w.Write([]byte("plain file bytes"))
+		}
+		return
+	}
 	method := r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
 	params := map[string]string{}
 	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
@@ -67,7 +79,9 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.ch <- c
 	}
 	var result any = true
-	if strings.HasPrefix(method, "send") || method == "editMessageText" {
+	if method == "getFile" {
+		result = map[string]any{"file_id": params["file_id"], "file_path": "files/" + params["file_id"]}
+	} else if strings.HasPrefix(method, "send") || method == "editMessageText" {
 		result = map[string]any{"message_id": id, "date": 0, "chat": map[string]any{"id": 1, "type": "private"}}
 	}
 	json.NewEncoder(w).Encode(map[string]any{"ok": true, "result": result})
@@ -125,7 +139,9 @@ func (s *scripted) Run(ctx context.Context, req agent.Request, h agent.Handler) 
 
 const owner = 42
 
-func setup(t *testing.T) (*Bot, *fakeAPI, map[string]*scripted) {
+// setup builds the frontend on a real core with scripted agents. opts can
+// adjust the core's dependencies (speech, checkpoints, ...).
+func setup(t *testing.T, opts ...func(*core.Deps)) (*Bot, *fakeAPI, map[string]*scripted) {
 	t.Helper()
 	api := &fakeAPI{ch: make(chan call, 100)}
 	srv := httptest.NewServer(api)
@@ -158,7 +174,11 @@ func setup(t *testing.T) (*Bot, *fakeAPI, map[string]*scripted) {
 	for k, v := range agents {
 		as[k] = v
 	}
-	c := core.New(core.Deps{Config: cfg, Agents: as, Store: st, Tools: br})
+	deps := core.Deps{Config: cfg, Agents: as, Store: st, Tools: br}
+	for _, o := range opts {
+		o(&deps)
+	}
+	c := core.New(deps)
 	b, err := New(cfg, c, bot.WithServerURL(srv.URL), bot.WithSkipGetMe())
 	if err != nil {
 		t.Fatal(err)
