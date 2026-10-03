@@ -11,10 +11,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - CodeQL, dependency review, OpenSSF Scorecard and Dependabot.
 - Unit tests for the ACP and Claude Code adapters (against fake agents), the Telegram frontend, speech providers, the store and the CLI. Library coverage is now 80%.
 - Community files: code of conduct, issue and pull request templates.
+- Fuzz tests for the Markdown-to-HTML converter, message splitting, argv expansion and the config parser.
+- Signed releases: Sigstore signature on the checksums and GitHub build provenance for every archive (see SECURITY.md).
+- `make vuln` also scans every development tool binary; tools are built with the same pinned Go toolchain.
 
 ### Changed
 - Go 1.26.8 (Go 1.25 is out of support and had 13 reachable standard-library vulnerabilities).
-- Container images: Go 1.26, Node 24 LTS, numeric user.
+- Container images: Go 1.26, Node 24 LTS, numeric user, base images pinned by digest.
 
 ### Fixed
 - The tool server had no timeouts.
@@ -22,6 +25,7 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 - ACP: a failed mode switch (for example to plan mode) was ignored silently; it is now reported.
 - ACP: `Close` panicked when called twice.
 - systemd unit: `PATH` with spaces broke the service.
+- Close errors on written files are now checked (CodeQL).
 
 ## [0.6.0] - 2026-10-02
 

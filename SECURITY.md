@@ -18,6 +18,19 @@ pocketagent gives a Telegram chat control over a coding agent that runs on your 
 - Set `budget.daily_usd`.
 - Use a dedicated bot per machine, and don't add the bot to groups with people who aren't on the allowlist. Non-allowlisted members can't control it, but they can read its replies.
 
+## Verifying a release
+
+Release archives come with build provenance, and the checksum file is signed with Sigstore (keyless, tied to this repository's release workflow):
+
+```sh
+gh attestation verify pocketagent_*_darwin_arm64.tar.gz --repo c0sm0thecoder/pocketagent
+
+cosign verify-blob --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp 'https://github.com/c0sm0thecoder/pocketagent/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com checksums.txt
+sha256sum --ignore-missing -c checksums.txt
+```
+
 ## Supported versions
 
 Security fixes go into the latest release. pocketagent is pre-1.0, so please upgrade to the newest version before reporting.
