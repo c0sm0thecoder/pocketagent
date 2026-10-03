@@ -87,7 +87,7 @@ func (w *whisperCpp) Transcribe(ctx context.Context, path string) (string, error
 	cmd := exec.CommandContext(ctx, w.Binary, "-m", w.Model, "-f", wav, "-l", w.Language, "-nt", "-np")
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %v: %s", w.Binary, err, lastLine(stderr.String()))
+		return "", fmt.Errorf("%s: %w: %s", w.Binary, err, lastLine(stderr.String()))
 	}
 	return clean(stdout.String())
 }
@@ -97,7 +97,7 @@ func ToWav(ctx context.Context, ffmpeg, in, out string) error {
 	cmd := exec.CommandContext(ctx, ffmpeg, "-nostdin", "-loglevel", "error", "-y",
 		"-i", in, "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("ffmpeg: %v: %s", err, bytes.TrimSpace(b))
+		return fmt.Errorf("ffmpeg: %w: %s", err, bytes.TrimSpace(b))
 	}
 	return nil
 }
@@ -134,17 +134,26 @@ func (h *httpAPI) Transcribe(ctx context.Context, path string) (string, error) {
 
 	var body bytes.Buffer
 	mw := multipart.NewWriter(&body)
-	mw.WriteField("model", h.Model)
+	if err := mw.WriteField("model", h.Model); err != nil {
+		return "", err
+	}
 	if h.Language != "" && h.Language != "auto" {
-		mw.WriteField("language", h.Language)
+		if err := mw.WriteField("language", h.Language); err != nil {
+			return "", err
+		}
 	}
 	// Many endpoints accept OGG only under the .ogg extension, not .oga.
 	name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)) + ".ogg"
-	fw, _ := mw.CreateFormFile("file", name)
+	fw, err := mw.CreateFormFile("file", name)
+	if err != nil {
+		return "", err
+	}
 	if _, err := io.Copy(fw, f); err != nil {
 		return "", err
 	}
-	mw.Close()
+	if err := mw.Close(); err != nil {
+		return "", err
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, h.BaseURL+"/audio/transcriptions", &body)
 	if err != nil {
@@ -199,7 +208,7 @@ func (c *command) Transcribe(ctx context.Context, path string) (string, error) {
 	cmd := exec.CommandContext(ctx, line[0], line[1:]...)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("%s: %v: %s", line[0], err, lastLine(stderr.String()))
+		return "", fmt.Errorf("%s: %w: %s", line[0], err, lastLine(stderr.String()))
 	}
 	return clean(stdout.String())
 }

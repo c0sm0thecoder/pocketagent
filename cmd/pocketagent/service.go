@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"os"
@@ -28,11 +29,11 @@ func serviceInstalled() bool {
 }
 
 func sh(name string, args ...string) error {
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(context.Background(), name, args...)
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("%s %s: %v: %s", name, strings.Join(args, " "), err, strings.TrimSpace(out.String()))
+		return fmt.Errorf("%s %s: %w: %s", name, strings.Join(args, " "), err, strings.TrimSpace(out.String()))
 	}
 	return nil
 }
@@ -45,7 +46,9 @@ func launchdTarget() string { return "gui/" + strconv.Itoa(os.Getuid()) }
 func serviceInstall(cfgPath, home string) error {
 	if pid := runningPID(home); pid != 0 && !serviceInstalled() {
 		fmt.Println("stopping the background instance first")
-		stop(home)
+		if err := stop(home); err != nil {
+			return err
+		}
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -54,57 +57,23 @@ func serviceInstall(cfgPath, home string) error {
 	exe, _ = filepath.EvalSymlinks(exe)
 	cfgPath, _ = filepath.Abs(cfgPath)
 	path := os.Getenv("PATH")
-	if err := os.MkdirAll(filepath.Dir(serviceFile()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(serviceFile()), 0o700); err != nil {
 		return err
 	}
 
 	switch runtime.GOOS {
 	case "darwin":
-		esc := html.EscapeString
-		plist := `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>` + serviceLabel + `</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>` + esc(exe) + `</string>
-    <string>run</string>
-    <string>--config</string>
-    <string>` + esc(cfgPath) + `</string>
-  </array>
-  <key>EnvironmentVariables</key>
-  <dict><key>PATH</key><string>` + esc(path) + `</string></dict>
-  <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
-  <key>ThrottleInterval</key><integer>10</integer>
-  <key>StandardOutPath</key><string>` + esc(logPath(home)) + `</string>
-  <key>StandardErrorPath</key><string>` + esc(logPath(home)) + `</string>
-</dict>
-</plist>
-`
-		if err := os.WriteFile(serviceFile(), []byte(plist), 0o644); err != nil {
+		plist := renderPlist(exe, cfgPath, path, logPath(home))
+		if err := os.WriteFile(serviceFile(), []byte(plist), 0o600); err != nil { //nolint:gosec // fixed path under the user's home
 			return err
 		}
-		sh("launchctl", "bootout", launchdTarget()+"/"+serviceLabel) // ignore "not loaded"
+		_ = sh("launchctl", "bootout", launchdTarget()+"/"+serviceLabel) // fails when not loaded yet
 		if err := sh("launchctl", "bootstrap", launchdTarget(), serviceFile()); err != nil {
 			return err
 		}
 	case "linux":
-		unit := fmt.Sprintf(`[Unit]
-Description=pocketagent: coding agents over Telegram
-After=network-online.target
-
-[Service]
-ExecStart=%q run --config %q
-Environment=PATH=%s
-Restart=on-failure
-RestartSec=10
-
-[Install]
-WantedBy=default.target
-`, exe, cfgPath, path)
-		if err := os.WriteFile(serviceFile(), []byte(unit), 0o644); err != nil {
+		unit := renderUnit(exe, cfgPath, path)
+		if err := os.WriteFile(serviceFile(), []byte(unit), 0o600); err != nil { //nolint:gosec // fixed path under the user's home
 			return err
 		}
 		if err := sh("systemctl", "--user", "daemon-reload"); err != nil {
@@ -128,9 +97,9 @@ func serviceUninstall() error {
 	}
 	switch runtime.GOOS {
 	case "darwin":
-		sh("launchctl", "bootout", launchdTarget()+"/"+serviceLabel)
+		_ = sh("launchctl", "bootout", launchdTarget()+"/"+serviceLabel) // fails if already stopped
 	case "linux":
-		sh("systemctl", "--user", "disable", "--now", "pocketagent")
+		_ = sh("systemctl", "--user", "disable", "--now", "pocketagent") // likewise
 	}
 	if err := os.Remove(serviceFile()); err != nil {
 		return err
@@ -162,4 +131,55 @@ func serviceCtl(action string) error {
 	}
 	fmt.Printf("%s (service)\n", map[string]string{"start": "started", "stop": "stopped"}[action])
 	return nil
+}
+
+// renderPlist is the launchd job: run at login, restart after crashes.
+func renderPlist(exe, cfgPath, path, logFile string) string {
+	esc := html.EscapeString
+	return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>` + serviceLabel + `</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>` + esc(exe) + `</string>
+    <string>run</string>
+    <string>--config</string>
+    <string>` + esc(cfgPath) + `</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict><key>PATH</key><string>` + esc(path) + `</string></dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>` + esc(logFile) + `</string>
+  <key>StandardErrorPath</key><string>` + esc(logFile) + `</string>
+</dict>
+</plist>
+`
+}
+
+// renderUnit is the systemd user service. Values are quoted so paths with
+// spaces survive systemd's word splitting.
+func renderUnit(exe, cfgPath, path string) string {
+	return fmt.Sprintf(`[Unit]
+Description=pocketagent: coding agents from your phone
+After=network-online.target
+
+[Service]
+ExecStart=%s run --config %s
+Environment=%s
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target
+`, systemdQuote(exe), systemdQuote(cfgPath), systemdQuote("PATH="+path))
+}
+
+// systemdQuote quotes a value for a unit file line.
+func systemdQuote(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "%", "%%")
+	return `"` + r.Replace(s) + `"`
 }

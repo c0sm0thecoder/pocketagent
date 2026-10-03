@@ -155,7 +155,9 @@ func (c *Core) turn(conv ConvID, rt *runtime, in Input) {
 	}
 	if res.CostUSD > 0 {
 		c.update(conv, func(st *store.Conversation) { st.TotalCost += res.CostUSD })
-		c.Store.AddSpend(in.User, res.CostUSD)
+		if err := c.Store.AddSpend(in.User, res.CostUSD); err != nil {
+			log.Printf("record spend: %v", err)
+		}
 	}
 
 	switch {
@@ -203,7 +205,9 @@ func (c *Core) speak(conv ConvID, s Settings, text string) {
 // points the agent at the files instead.
 func (c *Core) imagesToFiles(blocks []agent.Block) []agent.Block {
 	dir := filepath.Join(c.Config.Home, "uploads")
-	os.MkdirAll(dir, 0o700)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		log.Printf("uploads dir: %v", err)
+	}
 	out := make([]agent.Block, 0, len(blocks))
 	for i, b := range blocks {
 		if !b.IsImage() {

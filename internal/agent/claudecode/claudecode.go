@@ -193,8 +193,8 @@ func (a *Agent) run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 		return agent.Result{}, fmt.Errorf("start %s: %w", cmdline[0], err)
 	}
 	if err := json.NewEncoder(stdin).Encode(userMessage(req.Prompt)); err != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
+		_ = cmd.Process.Kill() // the prompt error below is what matters
+		_ = cmd.Wait()
 		return agent.Result{}, fmt.Errorf("write prompt: %w", err)
 	}
 	stdin.Close() // one message per turn
@@ -244,7 +244,7 @@ func (a *Agent) read(r io.Reader, h agent.Handler) (res agent.Result, gotResult 
 						}
 					case "tool_use":
 						var input map[string]any
-						json.Unmarshal(b.Input, &input)
+						_ = json.Unmarshal(b.Input, &input) // unparsable input still gets a title
 						p := Describe(b.Name, input)
 						h.ToolCall(p.Title, p.Kind)
 					}

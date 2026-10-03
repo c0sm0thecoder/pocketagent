@@ -1,0 +1,41 @@
+version: "2"
+
+run:
+  timeout: 5m
+  build-tags: [integration]   # lint the integration tests too
+
+linters:
+  default: standard           # errcheck, govet, ineffassign, staticcheck, unused
+  enable:
+    - bodyclose               # HTTP response bodies are closed
+    - errorlint               # errors are compared with errors.Is/As
+    - gosec                   # security problems
+    - misspell
+    - nilerr                  # returning nil after checking err != nil
+    - noctx                   # outgoing HTTP requests carry a context
+    - unconvert
+    - usestdlibvars
+  settings:
+    gosec:
+      excludes:
+        # pocketagent's job is to start agent and helper processes chosen in
+        # the user's own config; arguments never pass through a shell.
+        - G204
+        # Paths come from the user's config, the agent's working tree or
+        # files the agent asked to send, by design.
+        - G304
+        # Unhandled errors are errcheck's job; one policy, configured below.
+        - G104
+  exclusions:
+    # Unchecked Close/Remove/Print in cleanup paths is idiomatic Go. Where a
+    # written file is closed, the error is checked explicitly anyway.
+    presets: [std-error-handling]
+    rules:
+      - path: _test\.go
+        linters: [errcheck, gosec, noctx, bodyclose]
+
+formatters:
+  enable: [gofmt, goimports]
+  settings:
+    goimports:
+      local-prefixes: [github.com/c0sm0thecoder/pocketagent]

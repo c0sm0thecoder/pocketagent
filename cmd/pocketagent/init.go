@@ -190,10 +190,14 @@ func voiceSetup(p prompter, home string) string {
 }
 
 func download(url, dest string) error {
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
 		return err
 	}
-	resp, err := http.Get(url)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -207,7 +211,10 @@ func download(url, dest string) error {
 		return err
 	}
 	_, err = io.Copy(f, io.TeeReader(resp.Body, &progressWriter{total: resp.ContentLength}))
-	f.Close()
+	// A failed Close can mean the data never reached the disk.
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
 	fmt.Println()
 	if err != nil {
 		os.Remove(tmp)

@@ -3,6 +3,7 @@ package telegram
 import (
 	"html"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -92,6 +93,9 @@ func markdownToHTML(md string) string {
 	return strings.TrimRight(out.String(), "\n")
 }
 
+// placeholder marks where the i-th inline code span goes back in.
+func placeholder(i int) string { return "\x00" + strconv.Itoa(i) + "\x00" }
+
 func inlineToHTML(line string) string {
 	if m := reHeading.FindStringSubmatch(line); m != nil {
 		return "<b>" + inlineToHTML(m[1]) + "</b>"
@@ -100,7 +104,7 @@ func inlineToHTML(line string) string {
 	var codes []string
 	line = reInlineCode.ReplaceAllStringFunc(line, func(s string) string {
 		codes = append(codes, s[1:len(s)-1])
-		return "\x00" + string(rune('A'+len(codes)-1)) + "\x00"
+		return placeholder(len(codes) - 1)
 	})
 	line = html.EscapeString(line)
 	line = reLink.ReplaceAllString(line, `<a href="$2">$1</a>`)
@@ -111,7 +115,7 @@ func inlineToHTML(line string) string {
 		line = "• " + line[2:]
 	}
 	for i, c := range codes {
-		line = strings.Replace(line, "\x00"+string(rune('A'+i))+"\x00", "<code>"+html.EscapeString(c)+"</code>", 1)
+		line = strings.Replace(line, placeholder(i), "<code>"+html.EscapeString(c)+"</code>", 1)
 	}
 	return line
 }

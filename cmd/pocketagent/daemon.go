@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,7 +13,6 @@ import (
 	"time"
 )
 
-func pidPath(home string) string  { return filepath.Join(home, "pocketagent.pid") }
 func logPath(home string) string  { return filepath.Join(home, "pocketagent.log") }
 func lockPath(home string) string { return filepath.Join(home, "pocketagent.lock") }
 
@@ -27,8 +27,15 @@ func lockInstance(home string) (*os.File, error) {
 		f.Close()
 		return nil, errors.New("pocketagent is already running (see `pocketagent status`)")
 	}
-	f.Truncate(0)
-	fmt.Fprintf(f, "%d\n", os.Getpid())
+	// The lock file also records the pid, for status and stop.
+	if err := f.Truncate(0); err != nil {
+		f.Close()
+		return nil, err
+	}
+	if _, err := fmt.Fprintf(f, "%d\n", os.Getpid()); err != nil {
+		f.Close()
+		return nil, err
+	}
 	return f, nil
 }
 
@@ -41,7 +48,7 @@ func runningPID(home string) int {
 	defer f.Close()
 	// If we can take the lock, nobody holds it.
 	if syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
-		syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN) // also released by Close
 		return 0
 	}
 	data, _ := os.ReadFile(lockPath(home))
@@ -69,13 +76,15 @@ func start(cfgPath, home string) error {
 		return err
 	}
 	defer logf.Close()
-	cmd := exec.Command(exe, "run", "--config", cfgPath)
+	cmd := exec.CommandContext(context.Background(), exe, "run", "--config", cfgPath)
 	cmd.Stdout, cmd.Stderr = logf, logf
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // survive the terminal closing
 	if err := cmd.Start(); err != nil {
 		return err
 	}
-	cmd.Process.Release()
+	if err := cmd.Process.Release(); err != nil {
+		return err
+	}
 
 	// Give it a moment to load the config and connect.
 	for range 20 {
@@ -98,7 +107,9 @@ func stop(home string) error {
 		return nil
 	}
 	// SIGTERM lets runs stop cleanly; the bot kills agent processes on exit.
-	syscall.Kill(pid, syscall.SIGTERM)
+	if err := syscall.Kill(pid, syscall.SIGTERM); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("stop pid %d: %w", pid, err)
+	}
 	for range 40 {
 		time.Sleep(250 * time.Millisecond)
 		if runningPID(home) == 0 {
@@ -106,7 +117,9 @@ func stop(home string) error {
 			return nil
 		}
 	}
-	syscall.Kill(pid, syscall.SIGKILL)
+	if err := syscall.Kill(pid, syscall.SIGKILL); err != nil && !errors.Is(err, syscall.ESRCH) {
+		return fmt.Errorf("kill pid %d: %w", pid, err)
+	}
 	fmt.Println("stopped (forced)")
 	return nil
 }
@@ -128,7 +141,7 @@ func status(home string) error {
 }
 
 func logs(home string) error {
-	cmd := exec.Command("tail", "-n", "50", "-f", logPath(home))
+	cmd := exec.CommandContext(context.Background(), "tail", "-n", "50", "-f", logPath(home))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }

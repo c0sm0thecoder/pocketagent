@@ -21,11 +21,12 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
+
 	"github.com/c0sm0thecoder/pocketagent/internal/agent"
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
 	"github.com/c0sm0thecoder/pocketagent/internal/core"
-	"github.com/go-telegram/bot"
-	"github.com/go-telegram/bot/models"
 )
 
 type Bot struct {
@@ -130,12 +131,14 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *bot.Bot, u *models.Update) {
 	switch {
 	case strings.HasPrefix(m.Text, "/"):
 		b.handleCommand(ctx, conv, m)
+	// Media is downloaded and processed off the update handler; that work
+	// outlives the update, so it doesn't use the handler's context.
 	case m.Voice != nil:
-		go b.handleVoice(conv, userOf(m.From), m.Voice.FileID, m.Caption)
+		go b.handleVoice(conv, userOf(m.From), m.Voice.FileID, m.Caption) //nolint:gosec // outlives the update handler by design
 	case m.Audio != nil:
-		go b.handleVoice(conv, userOf(m.From), m.Audio.FileID, m.Caption)
+		go b.handleVoice(conv, userOf(m.From), m.Audio.FileID, m.Caption) //nolint:gosec // outlives the update handler by design
 	case len(m.Photo) > 0 || m.Document != nil:
-		go b.handleAttachment(conv, m)
+		go b.handleAttachment(conv, m) //nolint:gosec // outlives the update handler by design
 	case m.Text != "":
 		b.core.Submit(conv, core.Input{User: userOf(m.From), Blocks: []agent.Block{{Text: m.Text}}, Text: m.Text})
 	}
@@ -192,7 +195,10 @@ func (b *Bot) handleAttachment(conv core.ConvID, m *models.Message) {
 		block = agent.Block{Image: data, MimeType: mt}
 	} else {
 		dir := filepath.Join(b.cfg.Home, "uploads")
-		os.MkdirAll(dir, 0o700)
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			b.Notice(conv, "⚠️ Couldn't save file: "+err.Error())
+			return
+		}
 		path := filepath.Join(dir, time.Now().Format("20060102-150405")+"-"+filepath.Base(origName))
 		if err := os.WriteFile(path, data, 0o600); err != nil {
 			b.Notice(conv, "⚠️ Couldn't save file: "+err.Error())
@@ -264,7 +270,7 @@ func (b *Bot) Reply(conv core.ConvID, md string) {
 			preview = preview[:600] + "…"
 		}
 		b.sendMarkdown(ctx, conv, preview)
-		b.sendDocument(ctx, conv, "reply.md", []byte(md), "Full reply")
+		logErr("send reply file", b.sendDocument(ctx, conv, "reply.md", []byte(md), "Full reply"))
 		return
 	}
 	b.sendMarkdown(ctx, conv, md)
@@ -317,7 +323,7 @@ func (b *Bot) StartProgress(conv core.ConvID) core.Progress {
 		t := time.NewTicker(4 * time.Second)
 		defer t.Stop()
 		for {
-			b.tg.SendChatAction(context.Background(), &bot.SendChatActionParams{
+			_, _ = b.tg.SendChatAction(context.Background(), &bot.SendChatActionParams{ // cosmetic; retried every 4s
 				ChatID: targetOf(conv).chat, MessageThreadID: targetOf(conv).thread, Action: models.ChatActionTyping,
 			})
 			select {
@@ -385,10 +391,11 @@ func (p *progress) Done(summary string) {
 		p.b.editHTML(ctx, p.conv, p.msg, p.render(summary), nil)
 		return
 	}
-	p.b.tg.SendMessage(ctx, &bot.SendMessageParams{
+	_, err := p.b.tg.SendMessage(ctx, &bot.SendMessageParams{
 		ChatID: targetOf(p.conv).chat, MessageThreadID: targetOf(p.conv).thread, DisableNotification: true,
 		Text: "<i>" + html.EscapeString(summary) + "</i>", ParseMode: models.ParseModeHTML,
 	})
+	logErr("send summary", err)
 }
 
 type approvalView struct {
@@ -464,10 +471,19 @@ func (b *Bot) editHTML(ctx context.Context, conv core.ConvID, msg *models.Messag
 		b.sendHTML(ctx, conv, text, markup)
 		return
 	}
-	b.tg.EditMessageText(ctx, &bot.EditMessageTextParams{
+	_, err := b.tg.EditMessageText(ctx, &bot.EditMessageTextParams{
 		ChatID: targetOf(conv).chat, MessageID: msg.ID, Text: text, ParseMode: models.ParseModeHTML, ReplyMarkup: markup,
 		LinkPreviewOptions: &models.LinkPreviewOptions{IsDisabled: bot.True()},
 	})
+	logErr("edit message", err)
+}
+
+// logErr records failures of best-effort sends that have no caller to
+// report to. Re-sending identical text is not a failure.
+func logErr(op string, err error) {
+	if err != nil && !strings.Contains(err.Error(), "message is not modified") {
+		log.Printf("telegram: %s: %v", op, err)
+	}
 }
 
 func (b *Bot) sendMarkdown(ctx context.Context, conv core.ConvID, md string) {

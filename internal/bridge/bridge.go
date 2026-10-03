@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -56,23 +57,28 @@ func Start(host string, shared ...agent.Tool) (*Bridge, error) {
 	if host != "127.0.0.1" && host != "localhost" {
 		listen = ":0" // containers reach the host through a bridge interface
 	}
-	ln, err := net.Listen("tcp", listen)
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", listen)
 	if err != nil {
 		return nil, err
 	}
 	b.addr = ln.Addr().String()
 
 	mcpHandler := mcp.NewStreamableHTTPHandler(b.serverFor, nil)
-	go func() {
-		err := http.Serve(ln, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			want := []byte("Bearer " + b.secret)
 			if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 			mcpHandler.ServeHTTP(w, r)
-		}))
-		log.Printf("tool server stopped: %v", err)
+		}),
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       5 * time.Minute,
+		// No write timeout: an approval call legitimately waits for the user.
+	}
+	go func() {
+		log.Printf("tool server stopped: %v", srv.Serve(ln))
 	}()
 	return b, nil
 }
@@ -133,7 +139,8 @@ func (b *Bridge) call(t agent.Tool) mcp.ToolHandler {
 		}
 		out, err := t.Call(ctx, h, req.Params.Arguments)
 		if err != nil {
-			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil
+			// MCP reports tool failures as results, so the agent can read them.
+			return &mcp.CallToolResult{IsError: true, Content: []mcp.Content{&mcp.TextContent{Text: err.Error()}}}, nil //nolint:nilerr // see above
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: out}}}, nil
 	}

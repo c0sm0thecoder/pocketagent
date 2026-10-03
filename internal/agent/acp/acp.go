@@ -45,9 +45,10 @@ type Agent struct {
 	modeIDs map[agent.Mode][]string
 	idle    time.Duration
 
-	mu    sync.Mutex
-	procs map[string]*proc
-	stop  chan struct{}
+	mu        sync.Mutex
+	procs     map[string]*proc
+	stop      chan struct{}
+	closeOnce sync.Once
 }
 
 var (
@@ -92,8 +93,9 @@ func (a *Agent) Models(conv string) []string {
 	return models
 }
 
+// Close stops every agent process. It is safe to call more than once.
 func (a *Agent) Close() error {
-	close(a.stop)
+	a.closeOnce.Do(func() { close(a.stop) })
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for k, p := range a.procs {
@@ -162,7 +164,8 @@ func (p *proc) alive() bool {
 func (p *proc) kill() {
 	if p.cmd.Process != nil {
 		// Kill the whole process group: npx-launched agents fork children.
-		syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
+		// An error means the group is already gone.
+		_ = syscall.Kill(-p.cmd.Process.Pid, syscall.SIGKILL)
 	}
 }
 
@@ -234,7 +237,8 @@ func (a *Agent) proc(ctx context.Context, conv, cwd string) (*proc, error) {
 	}
 
 	cmdline := argv.Join(a.spec.Wrap, a.spec.Command, map[string]string{"cwd": cwd})
-	cmd := exec.Command(cmdline[0], cmdline[1:]...)
+	// The process outlives this call; proc.kill and the idle reaper end it.
+	cmd := exec.CommandContext(context.Background(), cmdline[0], cmdline[1:]...)
 	cmd.Dir = cwd
 	cmd.Env = append(os.Environ(), a.spec.Env...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -251,7 +255,7 @@ func (a *Agent) proc(ctx context.Context, conv, cwd string) (*proc, error) {
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start %s: %w", cmdline[0], err)
 	}
-	go cmd.Wait()
+	go func() { _ = cmd.Wait() }() // reap; exits surface through conn.Done
 
 	cl := &client{}
 	p = &proc{cmd: cmd, client: cl, cwd: cwd, stderr: errTail, lastUsed: time.Now()}
@@ -320,7 +324,9 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 	}
 	// Agents report a running session total; measure this turn's share.
 	costAtStart := cl.cost()
-	a.applyMode(ctx, p, sid, req.Mode)
+	if err := a.applyMode(ctx, p, sid, req.Mode); err != nil {
+		h.Message("_" + err.Error() + "_")
+	}
 	if err := a.applyModel(ctx, p, sid, req.Model); err != nil {
 		h.Message("_" + err.Error() + "_")
 	}
@@ -346,7 +352,7 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 		err  error
 	}
 	done := make(chan promptResult, 1)
-	go func() {
+	go func() { //nolint:gosec // cancelled via the ACP cancel notification, not ctx
 		resp, err := p.conn.Prompt(context.Background(), sdk.PromptRequest{SessionId: sdk.SessionId(sid), Prompt: prompt})
 		done <- promptResult{resp, err}
 	}()
@@ -357,7 +363,8 @@ func (a *Agent) Run(ctx context.Context, req agent.Request, h agent.Handler) (ag
 	case <-p.conn.Done():
 		return agent.Result{SessionID: sid}, a.explain("crashed", errors.New("agent exited"), p)
 	case <-ctx.Done():
-		p.conn.Cancel(context.Background(), sdk.CancelNotification{SessionId: sdk.SessionId(sid)})
+		// If the cancel can't be delivered, the timeout below kills the agent.
+		_ = p.conn.Cancel(context.Background(), sdk.CancelNotification{SessionId: sdk.SessionId(sid)})
 		select {
 		case <-done:
 		case <-time.After(10 * time.Second):
@@ -449,7 +456,10 @@ func (p *proc) setSession(id string, opts []sdk.SessionConfigOption, modes *sdk.
 	p.sessionID, p.options, p.modes = id, opts, modes
 }
 
-func (a *Agent) applyMode(ctx context.Context, p *proc, sid string, mode agent.Mode) {
+// applyMode switches the session to the agent's equivalent of mode. Only
+// plan mode is an error when the agent has no equivalent: the other modes
+// are also enforced by pocketagent's own approval policy.
+func (a *Agent) applyMode(ctx context.Context, p *proc, sid string, mode agent.Mode) error {
 	want := a.modeIDs[mode]
 	p.mu.Lock()
 	modes := p.modes
@@ -457,35 +467,42 @@ func (a *Agent) applyMode(ctx context.Context, p *proc, sid string, mode agent.M
 	if modes != nil {
 		for _, id := range want {
 			for _, m := range modes.AvailableModes {
-				if strings.EqualFold(string(m.Id), id) {
-					if m.Id != modes.CurrentModeId {
-						if _, err := p.conn.SetSessionMode(ctx, sdk.SetSessionModeRequest{SessionId: sdk.SessionId(sid), ModeId: m.Id}); err == nil {
-							p.mu.Lock()
-							p.modes.CurrentModeId = m.Id
-							p.mu.Unlock()
-						}
-					}
-					return
+				if !strings.EqualFold(string(m.Id), id) {
+					continue
 				}
+				if m.Id == modes.CurrentModeId {
+					return nil
+				}
+				if _, err := p.conn.SetSessionMode(ctx, sdk.SetSessionModeRequest{SessionId: sdk.SessionId(sid), ModeId: m.Id}); err != nil {
+					return fmt.Errorf("switch to %s mode: %w", mode, err)
+				}
+				p.mu.Lock()
+				p.modes.CurrentModeId = m.Id
+				p.mu.Unlock()
+				return nil
 			}
 		}
-		return
-	}
-	// Some agents expose modes as a config option instead.
-	cfgID, current, ok := p.configID(sdk.SessionConfigOptionCategoryMode)
-	if !ok {
-		return
-	}
-	for _, id := range want {
-		for _, o := range p.selectOptions(sdk.SessionConfigOptionCategoryMode) {
-			if strings.EqualFold(string(o.Value), id) {
-				if o.Value != current {
-					a.setOption(ctx, p, sid, cfgID, o.Value)
+	} else if cfgID, current, ok := p.configID(sdk.SessionConfigOptionCategoryMode); ok {
+		// Some agents expose modes as a config option instead.
+		for _, id := range want {
+			for _, o := range p.selectOptions(sdk.SessionConfigOptionCategoryMode) {
+				if !strings.EqualFold(string(o.Value), id) {
+					continue
 				}
-				return
+				if o.Value == current {
+					return nil
+				}
+				if err := a.setOption(ctx, p, sid, cfgID, o.Value); err != nil {
+					return fmt.Errorf("switch to %s mode: %w", mode, err)
+				}
+				return nil
 			}
 		}
 	}
+	if mode == agent.ModePlan {
+		return errors.New("this agent has no plan mode; approvals still apply")
+	}
+	return nil
 }
 
 func (a *Agent) applyModel(ctx context.Context, p *proc, sid, model string) error {

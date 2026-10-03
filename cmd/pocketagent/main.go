@@ -35,7 +35,7 @@ func main() {
 	cfgPath := fs.String("config", config.DefaultPath(), "config file")
 	force := fs.Bool("force", false, "init: overwrite an existing config")
 	fs.Usage = usage
-	fs.Parse(args)
+	_ = fs.Parse(args) // ExitOnError: exits on bad flags
 	home := filepath.Dir(*cfgPath)
 
 	var err error

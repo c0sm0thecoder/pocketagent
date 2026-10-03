@@ -28,7 +28,7 @@ func git(ctx context.Context, dir string, env []string, args ...string) (string,
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %v: %s", args[0], err, strings.TrimSpace(errb.String()))
+		return "", fmt.Errorf("git %s: %w: %s", args[0], err, strings.TrimSpace(errb.String()))
 	}
 	return strings.TrimRight(out.String(), "\n"), nil
 }
@@ -54,20 +54,33 @@ func tree(ctx context.Context, root string) (string, error) {
 	defer os.Remove(tmp.Name())
 
 	// Start from the real index so git can reuse its stat cache and only
-	// hash files that changed.
+	// hash files that changed. Without it (new repo, copy failure) the
+	// result is the same, just slower.
 	if idx, err := git(ctx, root, nil, "rev-parse", "--path-format=absolute", "--git-path", "index"); err == nil {
-		if src, err := os.Open(idx); err == nil {
-			dst, _ := os.Create(tmp.Name())
-			io.Copy(dst, src)
-			src.Close()
-			dst.Close()
-		}
+		_ = copyFile(idx, tmp.Name())
 	}
 	env := []string{"GIT_INDEX_FILE=" + tmp.Name()}
 	if _, err := git(ctx, root, env, "add", "-A"); err != nil {
 		return "", err
 	}
 	return git(ctx, root, env, "write-tree")
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 // Snapshot records the current working tree and returns a commit id.

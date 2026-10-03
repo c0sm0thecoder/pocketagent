@@ -135,9 +135,12 @@ func (o Options) Decode(v any) error {
 }
 
 // OptionsFrom builds Options from a map, for tests and generated configs.
+// It panics if m can't be represented as YAML, which is a programming error.
 func OptionsFrom(m map[string]any) Options {
 	var n yaml.Node
-	n.Encode(m)
+	if err := n.Encode(m); err != nil {
+		panic(fmt.Sprintf("config.OptionsFrom: %v", err))
+	}
 	return Options{node: &n}
 }
 

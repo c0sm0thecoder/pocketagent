@@ -79,7 +79,8 @@ func waitForFirstMessage(ctx context.Context, token string) (tgUser, error) {
 		for _, u := range updates {
 			offset = u.UpdateID + 1
 			if u.Message != nil && u.Message.From.ID != 0 {
-				tgCall(ctx, token, "getUpdates", url.Values{"offset": {fmt.Sprint(offset)}, "timeout": {"0"}}, &updates)
+				// Acknowledge it so the bot doesn't answer it later. Harmless if this fails.
+				_ = tgCall(ctx, token, "getUpdates", url.Values{"offset": {fmt.Sprint(offset)}, "timeout": {"0"}}, &updates)
 				return u.Message.From, nil
 			}
 		}

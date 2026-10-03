@@ -56,7 +56,7 @@ func toOpus(ctx context.Context, ffmpeg, in string) ([]byte, error) {
 	defer os.Remove(out)
 	cmd := exec.CommandContext(ctx, ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-i", in, "-c:a", "libopus", "-b:a", "32k", out)
 	if b, err := cmd.CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("ffmpeg: %v: %s", err, bytes.TrimSpace(b))
+		return nil, fmt.Errorf("ffmpeg: %w: %s", err, bytes.TrimSpace(b))
 	}
 	return os.ReadFile(out)
 }
@@ -89,7 +89,7 @@ func (s *say) Speak(ctx context.Context, text string) ([]byte, error) {
 		args = append(args, "-v", s.Voice)
 	}
 	if b, err := exec.CommandContext(ctx, "say", append(args, text)...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("say: %v: %s", err, bytes.TrimSpace(b))
+		return nil, fmt.Errorf("say: %w: %s", err, bytes.TrimSpace(b))
 	}
 	return toOpus(ctx, s.FFmpeg, aiff)
 }
@@ -175,7 +175,7 @@ func (c *command) Speak(ctx context.Context, text string) ([]byte, error) {
 	}
 	line := argv.Expand(c.Command, map[string]string{"text_file": in, "out": out})
 	if b, err := exec.CommandContext(ctx, line[0], line[1:]...).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("%s: %v: %s", line[0], err, bytes.TrimSpace(b))
+		return nil, fmt.Errorf("%s: %w: %s", line[0], err, bytes.TrimSpace(b))
 	}
 	return toOpus(ctx, c.FFmpeg, out)
 }

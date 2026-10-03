@@ -7,10 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/c0sm0thecoder/pocketagent/internal/agent"
-	"github.com/c0sm0thecoder/pocketagent/internal/core"
 	"github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
+
+	"github.com/c0sm0thecoder/pocketagent/internal/agent"
+	"github.com/c0sm0thecoder/pocketagent/internal/core"
 )
 
 const helpText = `<b>pocketagent</b>: your coding agent in your pocket.
@@ -104,7 +105,7 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.ConvID, m *models.Mes
 		b.sendHTML(ctx, conv, "📁 Now in <code>"+html.EscapeString(dir)+"</code> (new session)", nil)
 
 	case "/diff":
-		go b.sendDiff(conv, arg == "all")
+		go b.sendDiff(conv, arg == "all") //nolint:gosec // outlives the update handler by design
 
 	case "/undo":
 		cp, err := c.Undo(ctx, conv)
@@ -186,7 +187,7 @@ func (b *Bot) sendDiff(conv core.ConvID, all bool) {
 			stat = stat[:1500] + "\n…"
 		}
 		b.sendHTML(ctx, conv, "<pre>"+html.EscapeString(stat)+"</pre>", nil)
-		b.sendDocument(ctx, conv, "changes.diff", []byte(d), "Full diff")
+		logErr("send diff", b.sendDocument(ctx, conv, "changes.diff", []byte(d), "Full diff"))
 	}
 }
 
@@ -291,7 +292,8 @@ func (b *Bot) setAndReport(ctx context.Context, conv core.ConvID, msg *models.Me
 
 func (b *Bot) handleCallback(ctx context.Context, q *models.CallbackQuery) {
 	answer := func(text string) {
-		b.tg.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: q.ID, Text: text})
+		_, err := b.tg.AnswerCallbackQuery(ctx, &bot.AnswerCallbackQueryParams{CallbackQueryID: q.ID, Text: text})
+		logErr("answer callback", err)
 	}
 	if !b.allowed(q.From.ID) {
 		answer("Not authorized")
