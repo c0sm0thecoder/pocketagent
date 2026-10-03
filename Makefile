@@ -34,8 +34,11 @@ test: ## unit tests with the race detector
 cover: ## unit tests with coverage thresholds
 	scripts/coverage.sh
 
-vuln: ## known vulnerabilities in reachable code, including the standard library
+vuln: ## known vulnerabilities in reachable code, ours and the tools', including the standard library
 	$(call TOOL,govulncheck) ./...
+	@set -e; bin=$$(mktemp -d); trap 'rm -rf $$bin' EXIT; for t in tools/*; do n=$${t#tools/}; \
+		(cd $$t && go build -o $$bin/$$n $$(awk '/^tool /{print $$2}' go.mod)); \
+		echo "tool binary $$n:"; $(call TOOL,govulncheck) -mode=binary $$bin/$$n; done
 
 secrets: ## scan the whole git history for secrets
 	$(call TOOL,gitleaks) git --no-banner --redact .
@@ -43,9 +46,11 @@ secrets: ## scan the whole git history for secrets
 secrets-staged: ## scan staged changes for secrets
 	$(call TOOL,gitleaks) git --no-banner --redact --staged .
 
-tidy: ## go.mod and go.sum are tidy, for the module and every tool
-	@set -e; for m in . tools/*; do (cd $$m && go mod tidy -diff) || \
-		{ echo "$$m: go.mod/go.sum are not tidy; run 'go mod tidy' there"; exit 1; }; done
+tidy: ## go.mod and go.sum are tidy, and every tool builds with the module's toolchain
+	@set -e; want=$$(grep '^toolchain' go.mod); for m in . tools/*; do (cd $$m && go mod tidy -diff) || \
+		{ echo "$$m: go.mod/go.sum are not tidy; run 'go mod tidy' there"; exit 1; }; \
+		[ "$$(grep '^toolchain' $$m/go.mod)" = "$$want" ] || \
+		{ echo "$$m/go.mod must declare '$$want' (the Go that builds the tool matters too)"; exit 1; }; done
 
 build: ## cross-compile every release target
 	@set -e; for t in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do \
