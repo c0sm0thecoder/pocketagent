@@ -1,14 +1,38 @@
-# pocketagent
+<p align="center">
+  <img src="docs/assets/logo.svg" width="88" alt="">
+</p>
 
-**Your coding agent in your pocket.** Talk to any coding agent from your phone: type, send a voice note, or drop in a screenshot. When the agent wants to run a command or edit a file, approve it with a tap.
+<h1 align="center">pocketagent</h1>
 
-It runs on your own machine, next to your code, as one small Go binary. Agents, speech engines and models are all pluggable; nothing is tied to one vendor.
+<p align="center">
+  <b>Your coding agent, in your pocket.</b><br>
+  Drive any coding agent from your phone: type, talk, or send a screenshot, and approve risky actions with a tap.
+</p>
 
-```
-you (Telegram) ──► pocketagent ──► any coding agent: an ACP agent, a CLI, ...
-  text, voice,       queue, approvals,          on your machine, in your repos
-  images             checkpoints, budgets
-```
+<p align="center">
+  <a href="https://github.com/c0sm0thecoder/pocketagent/actions/workflows/ci.yml"><img src="https://github.com/c0sm0thecoder/pocketagent/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/c0sm0thecoder/pocketagent/releases/latest"><img src="https://img.shields.io/github/v/release/c0sm0thecoder/pocketagent" alt="Release"></a>
+  <a href="https://goreportcard.com/report/github.com/c0sm0thecoder/pocketagent"><img src="https://goreportcard.com/badge/github.com/c0sm0thecoder/pocketagent" alt="Go Report Card"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/c0sm0thecoder/pocketagent"><img src="https://api.scorecard.dev/projects/github.com/c0sm0thecoder/pocketagent/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://pkg.go.dev/github.com/c0sm0thecoder/pocketagent"><img src="https://pkg.go.dev/badge/github.com/c0sm0thecoder/pocketagent.svg" alt="Go Reference"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/c0sm0thecoder/pocketagent" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#using-it">Using it</a> ·
+  <a href="#agents">Agents</a> ·
+  <a href="config.example.yaml">Configuration</a> ·
+  <a href="SECURITY.md">Security</a> ·
+  <a href="CONTRIBUTING.md">Contributing</a>
+</p>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.svg">
+  <img src="docs/assets/hero-light.svg" alt="A chat on a phone: a voice note asks the agent to fix a bug; the agent reads files, asks to edit a file with Allow and Deny buttons, and reports that the tests pass.">
+</picture>
+
+pocketagent runs on your own machine, next to your code, as one small Go binary. You talk to it through a Telegram bot; it drives the coding agent you choose and brings its questions back to you. Agents, models and speech engines are all pluggable, and nothing is tied to one vendor.
 
 ## Features
 
@@ -30,11 +54,10 @@ you (Telegram) ──► pocketagent ──► any coding agent: an ACP agent, a
 **1. Install** (macOS or Linux):
 
 ```sh
-brew install c0sm0thecoder/tap/pocketagent
-# or
 go install github.com/c0sm0thecoder/pocketagent/cmd/pocketagent@latest
-# or download a binary from the releases page
 ```
+
+or download a binary from the [releases page](https://github.com/c0sm0thecoder/pocketagent/releases/latest), or run the [container image](#running-on-a-server).
 
 You also need at least one coding agent installed and logged in. For local voice transcription, install whisper.cpp and ffmpeg.
 
@@ -172,6 +195,13 @@ go test -race ./...                 # unit tests (no network, no agents)
 go test -tags integration ./...     # against real agents, whisper and Docker (costs a few cents)
 go run ./cmd/pocketagent doctor
 ```
+
+## Community
+
+- Questions and ideas: [Discussions](https://github.com/c0sm0thecoder/pocketagent/discussions)
+- Bugs and agent requests: [Issues](https://github.com/c0sm0thecoder/pocketagent/issues/new/choose)
+- Security reports: privately, through [Security advisories](https://github.com/c0sm0thecoder/pocketagent/security/advisories/new)
+- Everyone is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md). Changes are listed in the [Changelog](CHANGELOG.md).
 
 ## License
 

@@ -1,0 +1,30 @@
+name: Agent support
+description: An agent doesn't work, or you'd like a preset for one.
+labels: [agent]
+body:
+  - type: input
+    id: agent
+    attributes:
+      label: Agent
+      placeholder: name and link
+    validations:
+      required: true
+  - type: dropdown
+    id: protocol
+    attributes:
+      label: How does it run headless?
+      options:
+        - Agent Client Protocol (ACP)
+        - A CLI that takes a prompt and prints a reply
+        - Something else / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: The agents entry you tried
+      render: yaml
+  - type: textarea
+    id: result
+    attributes:
+      label: What happened?

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560" role="img" aria-label="A chat on a phone: a voice note asks the agent to fix a bug; the agent reads files, asks to edit a file with Allow and Deny buttons, and reports that the tests pass.">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F5F3FF"/><stop offset="1" stop-color="#EEF2FF"/></linearGradient>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#6366F1" flood-opacity="0.18"/></filter></defs>
+<rect width="900" height="560" rx="24" fill="url(#bg)"/>
+<g filter="url(#sh)"><rect x="58" y="20" width="354" height="520" rx="44" fill="#1F2937"/><rect x="70" y="32" width="330" height="496" rx="34" fill="#F3F4F6"/></g>
+<path d="M70 66a34 34 0 0 1 34-34h262a34 34 0 0 1 34 34v20h-330z" fill="#FFFFFF"/>
+<rect x="86" y="48" width="28" height="28" rx="8" fill="#6366F1"/><path d="M93 57l5 4-5 4" stroke="#fff" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><rect x="100" y="64" width="8" height="3" rx="1.5" fill="#fff"/>
+<text x="124" y="59" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" font-weight="600" fill="#111827">pocketagent</text>
+<text x="124" y="76" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">api project · ask mode</text>
+<rect x="134" y="100" width="252" height="62" rx="16" fill="#6366F1"/>
+<rect x="150" y="120.0" width="4" height="8" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="157" y="117.0" width="4" height="14" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="164" y="114.0" width="4" height="20" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="171" y="118.0" width="4" height="12" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="178" y="113.0" width="4" height="22" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="185" y="116.0" width="4" height="16" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="192" y="119.5" width="4" height="9" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="199" y="115.0" width="4" height="18" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="206" y="112.0" width="4" height="24" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="213" y="117.5" width="4" height="13" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="220" y="120.5" width="4" height="7" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="227" y="116.5" width="4" height="15" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="234" y="114.5" width="4" height="19" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="241" y="119.0" width="4" height="10" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<rect x="248" y="121.0" width="4" height="6" rx="2" fill="#FFFFFF" opacity="0.85"/>
+<text x="372" y="128" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#FFFFFF" opacity="0.8">0:07</text>
+<text x="150" y="151" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11.5" font-style="italic" fill="#FFFFFF">“login returns 500 for uppercase emails”</text>
+<rect x="84" y="176" width="250" height="58" rx="16" fill="#FFFFFF"/>
+<text x="98" y="199" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#374151">▸ Read: auth/login.go</text>
+<text x="98" y="219" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11.5" fill="#374151">▸ Grep: normalizeEmail</text>
+<rect x="84" y="248" width="302" height="148" rx="16" fill="#FFFFFF" stroke="#E5E7EB"/>
+<text x="98" y="272" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#111827">Edit auth/login.go</text>
+<rect x="98" y="284" width="274" height="22" rx="5" fill="#FEE2E2"/><text x="106" y="299" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#991B1B">- user, err := db.Find(email)</text>
+<rect x="98" y="310" width="274" height="22" rx="5" fill="#DCFCE7"/><text x="106" y="325" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#166534">+ user, err := db.Find(lower(email))</text>
+<rect x="98" y="346" width="133" height="34" rx="10" fill="#6366F1"/><text x="164.5" y="368" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#FFFFFF">Allow</text>
+<rect x="239" y="346" width="133" height="34" rx="10" fill="#F3F4F6"/><text x="305.5" y="368" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#374151">Deny</text>
+<rect x="84" y="410" width="270" height="66" rx="16" fill="#FFFFFF"/>
+<text x="98" y="434" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#111827">Fixed: emails are lower-cased</text>
+<text x="98" y="452" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#111827">before lookup. Tests pass.</text>
+<text x="98" y="468" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="10" fill="#6B7280">✓ 2m 10s · 6 tool calls · $0.08</text>
+<rect x="84" y="488" width="302" height="28" rx="14" fill="#FFFFFF" stroke="#E5E7EB"/>
+<text x="100" y="506" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#6B7280">/diff    /undo    /agent    /mode</text>
+<text x="470" y="120" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#111827">Your coding agent,</text>
+<text x="470" y="162" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#6366F1">in your pocket.</text>
+<circle cx="477" cy="223" r="5" fill="#6366F1"/>
+<text x="494" y="228" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#111827">Speak, type or send a screenshot</text>
+<text x="494" y="250" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#4B5563">Voice is transcribed on your machine.</text>
+<circle cx="477" cy="291" r="5" fill="#6366F1"/>
+<text x="494" y="296" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#111827">Any agent, any model</text>
+<text x="494" y="318" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#4B5563">ACP agents and any CLI, any model.</text>
+<circle cx="477" cy="359" r="5" fill="#6366F1"/>
+<text x="494" y="364" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#111827">Approve with a tap</text>
+<text x="494" y="386" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#4B5563">Or reply to say what to do instead.</text>
+<circle cx="477" cy="427" r="5" fill="#6366F1"/>
+<text x="494" y="432" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="600" fill="#111827">Undo anything</text>
+<text x="494" y="454" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="14" fill="#4B5563">Every turn is a git checkpoint.</text>
+</svg>
