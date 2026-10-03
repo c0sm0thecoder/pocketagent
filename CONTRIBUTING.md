@@ -57,9 +57,9 @@ make help      # all targets
 | `dockerlint` | Dockerfile problems (hadolint) |
 | `vet` | suspicious code, including the integration tests |
 | `cover` | regressions, with coverage thresholds: internal/ total at least 78%, every internal package at least 60% (packages without tests count as 0%) |
-| `vuln` | known vulnerabilities in code we actually call, including the Go standard library (govulncheck) |
+| `vuln` | known vulnerabilities in code we actually call and in every tool binary, including the Go standard library (govulncheck) |
 | `secrets` | credentials anywhere in the git history (gitleaks) |
-| `tidy` | go.mod/go.sum drift, for the module and each tool |
+| `tidy` | go.mod/go.sum drift, and tools built with the same Go toolchain as the module |
 | `build` | every release target still compiles |
 
 Tool versions are pinned in `tools/<name>/go.mod` and run with `go tool`, so everyone, CI included, uses the same versions. Dependabot keeps them, the Go modules, the GitHub Actions (pinned by commit SHA) and the Docker base images up to date.
@@ -71,6 +71,7 @@ CI adds CodeQL, dependency review on pull requests, a build of both container im
 ```sh
 make test                           # unit tests, race detector on
 make integration                    # real agents, whisper and Docker; costs a few cents
+go test ./internal/frontend/telegram -fuzz=FuzzMarkdownToHTML   # fuzz a target (see *_fuzz_test.go)
 ```
 
 The core runs against in-memory fakes, the Telegram frontend against a fake Bot API, the bridge against a real MCP client, and the ACP and Claude Code adapters against fake agents (the test binary re-runs itself as the agent). Please add tests next to your change.
