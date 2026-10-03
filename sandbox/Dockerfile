@@ -5,7 +5,7 @@
 #   docker build -t pocketagent-sandbox sandbox/
 #
 # See docs/sandbox.md for the matching config.
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       git ca-certificates curl ripgrep python3 build-essential \
