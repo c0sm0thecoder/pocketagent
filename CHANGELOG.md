@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-04
+
 ### Added
 - Project discovery: `pocketagent init` now has a Projects step that suggests folders from your code directories (`~/projects`, `~/code`, ...) and from where your agents ran recently, and `/topics` with no projects (or the new 🔎 *Find projects* button in `/project`) offers the same suggestions as buttons, including "Add all and create topics". Agent history locations are data (Claude Code and Codex today); folders are de-duplicated by identity, so case-insensitive file systems don't show duplicates, and subfolders fold into their project unless they are their own git repo.
 - `init` ends with the recommended group setup, and `/start` explains it.
@@ -67,7 +69,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Added
 - First release: Telegram frontend, Claude Code adapter, voice transcription, approvals.
 
-[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.5.1...v0.6.0
