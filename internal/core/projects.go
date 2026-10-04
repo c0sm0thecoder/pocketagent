@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
+	"github.com/c0sm0thecoder/pocketagent/internal/discover"
 	"github.com/c0sm0thecoder/pocketagent/internal/store"
 )
 
@@ -108,4 +109,15 @@ func (c *Core) BoundConversations() map[ConvID]string {
 		out[ConvID(key)] = p
 	}
 	return out
+}
+
+// SuggestProjects proposes existing folders that aren't projects yet:
+// folders where agents ran recently and folders in the usual code
+// directories, most recent first.
+func (c *Core) SuggestProjects(limit int) []discover.Candidate {
+	var have []string
+	for _, p := range c.Projects() {
+		have = append(have, p.Cwd)
+	}
+	return discover.Suggest(discover.Options{Exclude: have, Limit: limit})
 }

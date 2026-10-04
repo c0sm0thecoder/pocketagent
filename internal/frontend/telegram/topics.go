@@ -27,7 +27,7 @@ func (b *Bot) handleTopics(ctx context.Context, conv core.ConvID, m *models.Mess
 	}
 	projects := b.core.Projects()
 	if len(projects) == 0 {
-		b.Notice(conv, "No projects yet. Add one with /project add, or under projects: in "+b.cfg.Path)
+		b.showSuggestions(ctx, conv, nil, true, "No projects yet. ")
 		return
 	}
 

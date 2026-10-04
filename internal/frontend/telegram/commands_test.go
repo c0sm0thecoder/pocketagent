@@ -60,7 +60,7 @@ func TestSimpleCommands(t *testing.T) {
 	b, api, _ := setup(t)
 	cases := []struct{ cmd, want string }{
 		{"/help", "your coding agent in your pocket"},
-		{"/start", "Each chat, or each forum topic"},
+		{"/start", "Recommended: one topic per project"},
 		{"/new", "New session"},
 		{"/stop", "Nothing is running"},
 		{"/cwd", b.cfg.Defaults.Cwd},
@@ -288,17 +288,17 @@ func TestProjectAddFromChat(t *testing.T) {
 	// With no projects, the picker offers to add the current folder.
 	send(b, "/project")
 	rows := buttons(t, api.find(t, "sendMessage", "Choose a project"))
-	if len(rows) != 1 || !strings.Contains(rows[0][0].Text, "Add this folder ("+filepath.Base(dir)+")") {
-		t.Fatalf("picker = %+v", rows)
-	}
-	b.handleUpdate(ctx, nil, callback(rows[0][0].CallbackData, 0))
+	b.handleUpdate(ctx, nil, callback(button(t, rows, "➕ Add this folder ("+filepath.Base(dir)+")").CallbackData, 0))
 	api.find(t, "editMessageText", "Added project <b>"+filepath.Base(dir)+"</b>")
 
 	// Now it is listed with its path, and the add button is gone.
 	send(b, "/project")
 	rows = buttons(t, api.find(t, "sendMessage", "Choose a project"))
-	if len(rows) != 1 || !strings.Contains(rows[0][0].Text, filepath.Base(dir)+" · ") {
-		t.Fatalf("picker after add = %+v", rows)
+	button(t, rows, filepath.Base(dir)+" · ")
+	for _, r := range rows {
+		if strings.HasPrefix(r[0].Text, "➕ Add this folder") {
+			t.Fatalf("add button still shown for a project folder: %+v", rows)
+		}
 	}
 
 	other := t.TempDir()

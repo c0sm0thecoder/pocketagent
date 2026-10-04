@@ -18,13 +18,16 @@ import (
 
 const helpText = `<b>pocketagent</b>: your coding agent in your pocket.
 
-Send text, a voice note, or images (with an optional caption). Each chat, or each forum topic, is its own session. Messages sent while the agent works are queued.
+Send text, a voice note, or images (with an optional caption). Messages sent while the agent works are queued. When it wants to run a command or edit a file you get buttons; reply with text instead to deny and tell it what to do.
 
-When the agent wants to run a command or edit a file you get buttons. Reply with text instead to deny and tell it what to do.
+<b>Recommended: one topic per project</b>
+1. Create a group with just you and me.
+2. Group settings → Topics → on.
+3. Make me an admin with <i>Manage Topics</i>.
+4. Send /topics there. I'll create a topic for every project (and help you find them).
 
 /agent · /model · /mode · /project: switch with one tap
-/project add [name] [path] · /project remove <name>: manage projects
-/topics: in a group with Topics, one topic per project
+/project add [name] [path] · /project remove &lt;name&gt;
 /new: fresh session · /sessions: resume a recent one
 /stop: cancel the run and the queue
 /diff: what changed in the last turn (/diff all: since HEAD)
@@ -255,18 +258,19 @@ func (b *Bot) choices(conv core.ConvID, kind string) (title string, list []choic
 // the list index; the list is rebuilt on tap.
 func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message, kind string) {
 	title, list, current := b.choices(conv, kind)
-	var rows [][]models.InlineKeyboardButton
-	// Projects can be added right from the picker: register the folder the
-	// conversation is in, unless it already is a project.
+	var rows, actions [][]models.InlineKeyboardButton
 	if kind == "project" {
+		// Projects can be added right from the picker: the folder the
+		// conversation is in (unless it already is one), or suggestions.
 		cwd := b.core.Settings(conv).Cwd
 		if _, ok := b.core.ProjectAt(cwd); !ok {
-			rows = append(rows, []models.InlineKeyboardButton{{
+			actions = append(actions, []models.InlineKeyboardButton{{
 				Text: "➕ Add this folder (" + filepath.Base(cwd) + ")", CallbackData: "pa|add|0",
 			}})
 		}
+		actions = append(actions, []models.InlineKeyboardButton{{Text: "🔎 Find projects", CallbackData: "sg|show|p"}})
 	}
-	if len(list) == 0 && len(rows) == 0 {
+	if len(list) == 0 && len(actions) == 0 {
 		b.Notice(conv, "Nothing to choose from yet.")
 		return
 	}
@@ -280,6 +284,7 @@ func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message,
 		}
 		rows = append(rows, []models.InlineKeyboardButton{{Text: label, CallbackData: fmt.Sprintf("pk|%s|%d", kind, i)}})
 	}
+	rows = append(rows, actions...)
 	b.editHTML(ctx, conv, msg, "<b>"+html.EscapeString(title)+"</b>", &models.InlineKeyboardMarkup{InlineKeyboard: rows})
 }
 
@@ -364,6 +369,19 @@ func (b *Bot) handleCallback(ctx context.Context, q *models.CallbackQuery) {
 			return
 		}
 		answer("")
+
+	case "sg":
+		if q.Message.Message == nil {
+			answer("")
+			return
+		}
+		answer("")
+		if parts[1] == "show" {
+			msg := q.Message.Message
+			b.showSuggestions(ctx, convOf(msg), msg, parts[2] == "t", "")
+			return
+		}
+		b.pickSuggestion(ctx, q, parts[1], parts[2])
 
 	case "pa":
 		msg := q.Message.Message

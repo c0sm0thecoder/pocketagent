@@ -4,11 +4,14 @@ import (
 	"bufio"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/c0sm0thecoder/pocketagent/internal/config"
 )
 
 func TestRenderPlistIsValidXML(t *testing.T) {
@@ -111,5 +114,42 @@ func TestDoctorOnBrokenConfig(t *testing.T) {
 	os.WriteFile(p, []byte("telegram: {token: x}\n"), 0o600)
 	if err := doctor(p); err == nil {
 		t.Error("doctor passed a broken config")
+	}
+}
+
+func TestParseSelection(t *testing.T) {
+	cases := map[string]string{"": "", "all": "0,1,2,3", "1,3": "0,2", "2-4": "1,2,3", "1 1,2": "0,1"}
+	for in, want := range cases {
+		got, err := parseSelection(in, 4)
+		var parts []string
+		for _, i := range got {
+			parts = append(parts, fmt.Sprint(i))
+		}
+		if err != nil || strings.Join(parts, ",") != want {
+			t.Errorf("parseSelection(%q) = %v, %v; want %s", in, got, err, want)
+		}
+	}
+	for _, bad := range []string{"0", "5", "x", "3-1", "1-9"} {
+		if _, err := parseSelection(bad, 4); err == nil {
+			t.Errorf("parseSelection(%q) accepted", bad)
+		}
+	}
+}
+
+// The projects section init writes is valid config, even for odd names.
+func TestProjectsSetupOutputParses(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := filepath.Join(home, "projects", "Odd: name #1")
+	os.MkdirAll(dir, 0o700)
+	p := prompter{bufio.NewReader(strings.NewReader("all\n"))}
+	section := projectsSetup(p)
+	cfg := "telegram: {token: x, allowed_users: [1]}\nagents: {a: {type: t, command: c}}\n" + section
+	c, err := config.Parse([]byte(cfg), "/tmp/c.yaml")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, cfg)
+	}
+	if c.Projects["Odd: name #1"].Cwd != dir {
+		t.Errorf("projects = %+v", c.Projects)
 	}
 }

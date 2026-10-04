@@ -10,10 +10,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/c0sm0thecoder/pocketagent/internal/config"
+	"github.com/c0sm0thecoder/pocketagent/internal/discover"
 	"github.com/c0sm0thecoder/pocketagent/internal/registry"
 )
 
@@ -115,7 +117,10 @@ func initConfig(cfgPath string, force bool) error {
 	}
 	cwd := p.ask("\n4. Folder the agent starts in", strings.Replace(defCwd, userHome, "~", 1))
 
-	fmt.Println("\n5. Voice messages")
+	fmt.Println("\n5. Projects (one Telegram topic each, later)")
+	projects := projectsSetup(p)
+
+	fmt.Println("\n6. Voice messages")
 	transcriber := voiceSetup(p, home)
 	tts := "tts:\n  type: none           # say | http | command"
 	if runtime.GOOS == "darwin" && onPath("say", "ffmpeg") {
@@ -140,9 +145,10 @@ defaults:
 agents:
 %s
 %s
+%s
 
 %s
-`, token, user.ID, def, cwd, agents.String(), transcriber, tts)
+`, token, user.ID, def, cwd, agents.String(), projects, transcriber, tts)
 
 	if err := os.MkdirAll(home, 0o700); err != nil {
 		return err
@@ -154,7 +160,90 @@ agents:
 		return fmt.Errorf("wrote %s but it doesn't load: %w", cfgPath, err)
 	}
 	fmt.Printf("\n✓ Wrote %s\n\nNext:\n  pocketagent start             run in the background\n  pocketagent service install   start at login and restart on crashes\n  pocketagent doctor            check everything\n", cfgPath)
+	fmt.Printf(`
+Recommended: one Telegram topic per project, like terminal tabs.
+  1. Create a group with just you and @%s.
+  2. Group settings: turn on Topics.
+  3. Make @%s an admin with Manage Topics.
+  4. Send /topics in the group.
+`, me.Username, me.Username)
 	return nil
+}
+
+// projectsSetup offers folders found on this machine and returns the
+// projects section of the config, or "" when none are chosen.
+func projectsSetup(p prompter) string {
+	cands := discover.Suggest(discover.Options{Limit: 15})
+	if len(cands) == 0 {
+		fmt.Println("   None found. Add projects later with /project add in Telegram.")
+		return ""
+	}
+	fmt.Println("   Found these folders (from your code folders and recent agent sessions):")
+	for i, c := range cands {
+		fmt.Printf("   %2d. %-26s %s\n", i+1, c.Name, shortHome(c.Path))
+	}
+	for {
+		answer := p.ask("   Add which? Numbers like 1,3,5, 'all', or Enter to skip", "")
+		picked, err := parseSelection(answer, len(cands))
+		if err != nil {
+			fmt.Println("  ", err)
+			continue
+		}
+		if len(picked) == 0 {
+			return ""
+		}
+		var sb strings.Builder
+		sb.WriteString("\nprojects:\n")
+		for _, i := range picked {
+			fmt.Fprintf(&sb, "  %q:\n    cwd: %q\n", cands[i].Name, shortHome(cands[i].Path))
+		}
+		fmt.Printf("   ✓ %d projects\n", len(picked))
+		return sb.String()
+	}
+}
+
+// parseSelection turns "1,3-5", "all" or "" into zero-based indexes below n.
+func parseSelection(s string, n int) ([]int, error) {
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return nil, nil
+	}
+	if s == "all" {
+		out := make([]int, n)
+		for i := range out {
+			out[i] = i
+		}
+		return out, nil
+	}
+	seen := map[int]bool{}
+	var out []int
+	for _, part := range strings.FieldsFunc(s, func(r rune) bool { return r == ',' || r == ' ' }) {
+		lo, hi, isRange := strings.Cut(part, "-")
+		a, err1 := strconv.Atoi(lo)
+		b := a
+		var err2 error
+		if isRange {
+			b, err2 = strconv.Atoi(hi)
+		}
+		if err1 != nil || err2 != nil || a < 1 || b > n || a > b {
+			return nil, fmt.Errorf("%q isn't a number between 1 and %d", part, n)
+		}
+		for i := a; i <= b; i++ {
+			if !seen[i-1] {
+				seen[i-1] = true
+				out = append(out, i-1)
+			}
+		}
+	}
+	return out, nil
+}
+
+// shortHome shows paths under the home directory as ~/...
+func shortHome(p string) string {
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + p[len(home):]
+	}
+	return p
 }
 
 // voiceSetup offers local transcription when whisper.cpp is installed, and
