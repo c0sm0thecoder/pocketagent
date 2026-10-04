@@ -5,12 +5,14 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"time"
 )
 
 // Agent runs turns of a conversation with one coding agent.
 //
 // Optional behaviour is expressed as separate interfaces that an Agent may
-// also implement: ModelLister, ToolProvider and io.Closer.
+// also implement: ModelLister, SessionLister, ResumeHinter, ToolProvider
+// and io.Closer.
 type Agent interface {
 	// Caps reports what the agent supports, so callers can adapt instead of
 	// failing (for example by saving images to files).
@@ -22,6 +24,26 @@ type Agent interface {
 // ModelLister is implemented by agents that can name models for a picker.
 type ModelLister interface {
 	Models(conv string) []string
+}
+
+// SessionLister is implemented by agents that can list their sessions in a
+// folder, including ones started outside pocketagent (in a terminal), so
+// they can be continued from chat.
+type SessionLister interface {
+	Sessions(ctx context.Context, conv, cwd string) ([]SessionInfo, error)
+}
+
+// SessionInfo describes a session an agent can resume.
+type SessionInfo struct {
+	ID      string
+	Title   string
+	Updated time.Time
+}
+
+// ResumeHinter is implemented by agents that can tell the user how to
+// continue a session in their own terminal.
+type ResumeHinter interface {
+	ResumeCommand(cwd, sessionID string) string
 }
 
 // ToolProvider is implemented by agents that need extra tools on the tool

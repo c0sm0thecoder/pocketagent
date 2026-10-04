@@ -80,6 +80,7 @@ The bot creates a topic for every project and binds each to its folder. Add proj
 - **Finds your projects.** `init` and the 🔎 *Find projects* button suggest folders from your code directories and from where your agents ran recently.
 - **Switch with a tap.** `/agent`, `/model`, `/mode`, `/project` and `/sessions` show inline pickers.
 - **Undo.** Every turn takes a git snapshot without touching your branch, index or stash. `/diff` shows what changed, and `/undo` rolls it back.
+- **Laptop to phone and back.** Started something in a terminal? `/sessions` lists your computer's sessions for that project; tap one to continue it from your phone with full context. `/handoff` gives you the command to take a chat session back to the terminal.
 - **Queue.** Keep sending messages while the agent works; they run in order.
 - **Budgets.** A daily spend cap per user, for agents that report cost.
 - **Sandboxing.** Wrap any agent in a container ([docs/sandbox.md](docs/sandbox.md)).
@@ -95,7 +96,8 @@ The bot creates a topic for every project and binds each to its folder. Add proj
 | `/project remove <name>` | forget a project added from chat (the folder is untouched) |
 | `/topics [name...]` | in a group with Topics: create a topic per project, each bound to its folder |
 | `/new` | fresh session |
-| `/sessions` | resume a recent session |
+| `/sessions` | continue a session, **including ones you started in a terminal on your computer** (marked 💻) |
+| `/handoff` | the terminal command to continue this chat's session on your computer |
 | `/stop` | cancel the run and anything queued |
 | `/diff` | changes from the last turn (`/diff all`: since HEAD) |
 | `/undo` | roll back the last turn's file changes |

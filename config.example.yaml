@@ -36,7 +36,8 @@ permissions:
 #                idle_timeout
 #   command:     model_args, image_args, stdin, timeout; the command may
 #                use {prompt}, {cwd} and {model}
-#   claude-code: none
+#   claude-code: history_dir (where Claude Code keeps sessions; default
+#                ~/.claude/projects or $CLAUDE_CONFIG_DIR/projects)
 agents:
   aider:
     type: command

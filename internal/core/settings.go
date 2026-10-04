@@ -161,23 +161,5 @@ func (c *Core) Caps(conv ConvID) agent.Caps {
 	return agent.Caps{}
 }
 
-func (c *Core) Sessions(conv ConvID) []store.SessionRecord { return c.Store.Get(string(conv)).Sessions }
-
-func (c *Core) ResumeSession(conv ConvID, id string) (store.SessionRecord, error) {
-	for _, r := range c.Sessions(conv) {
-		if r.ID != id {
-			continue
-		}
-		c.update(conv, func(s *store.Conversation) {
-			s.SessionID, s.Cwd, s.AlwaysAllow = r.ID, r.Cwd, nil
-			if _, ok := c.Agents[r.Agent]; ok {
-				s.Agent = r.Agent
-			}
-		})
-		return r, nil
-	}
-	return store.SessionRecord{}, fmt.Errorf("session not found")
-}
-
 // Usage is what a user spent today and over the last 30 days.
 func (c *Core) Usage(user string) (today, month float64) { return c.Store.Spend(user) }

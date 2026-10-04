@@ -4,6 +4,11 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- Continue sessions from your computer: `/sessions` now also lists the agent's own sessions for the project folder, including ones started in a terminal (marked 💻), and continues them with full context. Supported for Claude Code (from its session logs) and for ACP agents that implement session listing.
+- `/handoff`, and a line in `/status`, give the terminal command to continue the chat's current session on your computer (Claude Code).
+- Agent contract: optional `SessionLister` and `ResumeHinter` interfaces.
+
 ## [0.9.1] - 2026-10-04
 
 ### Fixed

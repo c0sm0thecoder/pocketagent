@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-telegram/bot/models"
 
@@ -141,12 +142,12 @@ func TestProjectsAndSessions(t *testing.T) {
 	send(b, "/new")
 	api.find(t, "sendMessage", "New session")
 	send(b, "/sessions")
-	rows = buttons(t, api.find(t, "sendMessage", "Resume a session"))
+	rows = buttons(t, api.find(t, "sendMessage", "Continue a session"))
 	if !strings.Contains(rows[0][0].Text, "fix the header") {
 		t.Fatalf("sessions = %+v", rows)
 	}
 	b.handleUpdate(context.Background(), nil, callback(rows[0][0].CallbackData, 0))
-	api.find(t, "editMessageText", "Resumed: <i>fix the header</i>")
+	api.find(t, "editMessageText", "Continuing <i>fix the header</i>")
 }
 
 func TestStaleCallbacks(t *testing.T) {
@@ -325,4 +326,41 @@ func TestProjectFromConfigCannotBeRemoved(t *testing.T) {
 	b.cfg.Path = "/home/me/.pocketagent/config.yaml"
 	send(b, "/project remove site")
 	api.find(t, "sendMessage", "defined in /home/me/.pocketagent/config.yaml")
+}
+
+type listingScripted struct {
+	*scripted
+	listed []agent.SessionInfo
+}
+
+func (l listingScripted) Sessions(context.Context, string, string) ([]agent.SessionInfo, error) {
+	return l.listed, nil
+}
+func (l listingScripted) ResumeCommand(cwd, id string) string {
+	return "cd " + cwd + " && agent --resume " + id
+}
+
+func TestContinueALaptopSession(t *testing.T) {
+	b, api, agents := setup(t, func(d *core.Deps) {
+		d.Agents["alpha"] = listingScripted{scripted: &scripted{}, listed: []agent.SessionInfo{
+			{ID: "laptop-1", Title: "Add dark mode", Updated: time.Now()},
+		}}
+	})
+	_ = agents
+	send(b, "/handoff")
+	api.find(t, "sendMessage", "No session yet")
+
+	send(b, "/sessions")
+	rows := buttons(t, api.find(t, "sendMessage", "Continue a session"))
+	btn := button(t, rows, "💻 ")
+	if btn.CallbackData != "ss|laptop-1|" || !strings.Contains(btn.Text, "Add dark mode") {
+		t.Fatalf("button = %+v", btn)
+	}
+	b.handleUpdate(context.Background(), nil, callback(btn.CallbackData, 0))
+	api.find(t, "editMessageText", "close it there first")
+
+	send(b, "/handoff")
+	api.find(t, "sendMessage", "agent --resume laptop-1")
+	send(b, "/status")
+	api.find(t, "sendMessage", "On your computer")
 }

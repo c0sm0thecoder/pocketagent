@@ -24,7 +24,13 @@ import (
 const approvalTool = "approve"
 
 type Agent struct {
-	spec agent.Spec
+	spec       agent.Spec
+	historyDir string // where Claude Code keeps sessions; see historyRoot
+}
+
+type options struct {
+	// HistoryDir overrides where Claude Code's session logs are read from.
+	HistoryDir string `yaml:"history_dir"`
 }
 
 var (
@@ -32,13 +38,13 @@ var (
 	_ agent.ToolProvider = (*Agent)(nil)
 )
 
-// New builds the adapter. It has no options of its own.
+// New builds the adapter.
 func New(spec agent.Spec) (agent.Agent, error) {
-	var opts struct{}
+	var opts options
 	if err := spec.Options.Decode(&opts); err != nil {
 		return nil, err
 	}
-	return &Agent{spec: spec}, nil
+	return &Agent{spec: spec, historyDir: opts.HistoryDir}, nil
 }
 
 func (a *Agent) Caps() agent.Caps {

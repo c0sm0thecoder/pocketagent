@@ -246,3 +246,22 @@ func TestRejectsUnknownOptions(t *testing.T) {
 		t.Error("unknown option accepted")
 	}
 }
+
+func TestListSessions(t *testing.T) {
+	a := newFake(t)
+	dir := t.TempDir()
+	res := run(t, a, agent.Request{Cwd: dir, Prompt: prompt("hello")}, &recorder{})
+	ss, err := a.Sessions(context.Background(), "c", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ss) != 2 || ss[0].ID != res.SessionID || ss[1].ID != "terminal-1" || ss[1].Title != "started in a terminal" {
+		t.Fatalf("sessions = %+v", ss)
+	}
+	// A session started elsewhere can be continued here (session/load).
+	h := &recorder{}
+	run(t, a, agent.Request{Cwd: dir, SessionID: "terminal-1", Prompt: prompt("hello")}, h)
+	if len(h.sessions) != 0 {
+		t.Errorf("started a new session instead of loading: %v", h.sessions)
+	}
+}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -91,4 +92,33 @@ func TestImage(t *testing.T) {
 	if out := strings.ToLower(h.text.String() + res.Final); !strings.Contains(out, "red") {
 		t.Errorf("model did not see the image: %q", out)
 	}
+}
+
+// A session started in a terminal shows up in Sessions and continues here
+// with its context.
+func TestContinueTerminalSession(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command("claude", "-p", "--model", "haiku", "Remember this word for later: zebra-42. Reply only OK.")
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("terminal session: %v %s", err, out)
+	}
+	a := newAgent(t)
+	// Claude Code files sessions under the resolved path (macOS: /private/var/...).
+	real, _ := filepath.EvalSymlinks(dir)
+	ss, err := a.(agent.SessionLister).Sessions(context.Background(), "", real)
+	if err != nil || len(ss) == 0 {
+		t.Fatalf("terminal session not listed: %v %v", ss, err)
+	}
+	t.Logf("listed: %+v", ss[0])
+	h := &autoHandler{}
+	res, err := a.Run(context.Background(), agent.Request{Cwd: real, Model: "haiku", SessionID: ss[0].ID,
+		Prompt: []agent.Block{{Text: "What was the word I asked you to remember? Reply with just the word."}}}, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out := h.text.String() + res.Final; !strings.Contains(out, "zebra-42") {
+		t.Errorf("context lost: %q", out)
+	}
+	t.Logf("hint: %s", a.(agent.ResumeHinter).ResumeCommand(real, res.SessionID))
 }

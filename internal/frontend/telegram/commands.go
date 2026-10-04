@@ -28,7 +28,8 @@ Send text, a voice note, or images (with an optional caption). Messages sent whi
 
 /agent · /model · /mode · /project: switch with one tap
 /project add [name] [path] · /project remove &lt;name&gt;
-/new: fresh session · /sessions: resume a recent one
+/new: fresh session · /sessions: continue one, including sessions from your computer
+/handoff: the terminal command to continue this session on your computer
 /stop: cancel the run and the queue
 /diff: what changed in the last turn (/diff all: since HEAD)
 /undo: roll back the last turn's file changes
@@ -113,6 +114,17 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.ConvID, m *models.Mes
 	case "/sessions":
 		b.picker(ctx, conv, nil, "session")
 
+	case "/handoff":
+		if hint := c.ResumeHint(conv); hint != "" {
+			b.sendHTML(ctx, conv, "💻 Continue this session on your computer:\n<pre>"+html.EscapeString(hint)+"</pre>\nStop it here first (/stop) if it's running.", nil)
+			return
+		}
+		if c.Settings(conv).SessionID == "" {
+			b.Notice(conv, "No session yet: send a message first.")
+			return
+		}
+		b.Notice(conv, c.Settings(conv).Agent+" can't be continued from a terminal command.")
+
 	case "/cwd":
 		if arg == "" {
 			b.sendHTML(ctx, conv, "📁 <code>"+html.EscapeString(c.Settings(conv).Cwd)+"</code>", nil)
@@ -189,6 +201,9 @@ func (b *Bot) statusText(conv core.ConvID) string {
 		fmt.Fprintf(&sb, "\nAlways allowed: %s", html.EscapeString(strings.Join(s.AlwaysAllow, ", ")))
 	}
 	fmt.Fprintf(&sb, "\nVoice replies: %v\nSpent in this conversation: $%.4f", s.Voice, s.TotalCost)
+	if hint := b.core.ResumeHint(conv); hint != "" {
+		fmt.Fprintf(&sb, "\n💻 On your computer: <code>%s</code>", html.EscapeString(hint))
+	}
 	return sb.String()
 }
 
@@ -245,11 +260,17 @@ func (b *Bot) choices(conv core.ConvID, kind string) (title string, list []choic
 		}
 		return "Choose a project", list, s.Project
 	case "session":
-		for _, r := range c.Sessions(conv) {
-			label := r.Updated.Format("Jan 2 15:04") + " · " + r.Agent + " · " + r.Title
+		for _, r := range c.Sessions(context.Background(), conv) {
+			label := r.Updated.Format("Jan 2 15:04") + " · " + r.Title
+			if r.Agent != s.Agent {
+				label += " (" + r.Agent + ")"
+			}
+			if r.Elsewhere {
+				label = "💻 " + label
+			}
 			list = append(list, choice{label, r.ID})
 		}
-		return "Resume a session", list, s.SessionID
+		return "Continue a session (💻 = started on your computer)", list, s.SessionID
 	}
 	return "", nil, ""
 }
@@ -282,7 +303,12 @@ func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message,
 		if len(label) > 60 {
 			label = label[:57] + "..."
 		}
-		rows = append(rows, []models.InlineKeyboardButton{{Text: label, CallbackData: fmt.Sprintf("pk|%s|%d", kind, i)}})
+		data := fmt.Sprintf("pk|%s|%d", kind, i)
+		if kind == "session" && len(ch.value) <= 60 {
+			// Sessions change while the list is on screen; refer by id.
+			data = "ss|" + ch.value + "|"
+		}
+		rows = append(rows, []models.InlineKeyboardButton{{Text: label, CallbackData: data}})
 	}
 	rows = append(rows, actions...)
 	b.editHTML(ctx, conv, msg, "<b>"+html.EscapeString(title)+"</b>", &models.InlineKeyboardMarkup{InlineKeyboard: rows})
@@ -333,9 +359,12 @@ func (b *Bot) setAndReport(ctx context.Context, conv core.ConvID, msg *models.Me
 				html.EscapeString(value), html.EscapeString(s.Agent), html.EscapeString(s.Cwd))
 		}
 	case "session":
-		r, e := c.ResumeSession(conv, value)
+		r, e := c.ResumeSession(ctx, conv, value)
 		err = e
-		text = "↪️ Resumed: <i>" + html.EscapeString(r.Title) + "</i> (" + html.EscapeString(r.Agent) + ")"
+		text = "↪️ Continuing <i>" + html.EscapeString(r.Title) + "</i> (" + html.EscapeString(r.Agent) + "). Send a message to pick up where it left off."
+		if r.Elsewhere {
+			text += "\n\nIf it's still open in a terminal, close it there first: two agents writing to one session can conflict."
+		}
 	}
 	if err != nil {
 		text = html.EscapeString(err.Error())
@@ -382,6 +411,15 @@ func (b *Bot) handleCallback(ctx context.Context, q *models.CallbackQuery) {
 			return
 		}
 		b.pickSuggestion(ctx, q, parts[1], parts[2])
+
+	case "ss":
+		msg := q.Message.Message
+		if msg == nil {
+			answer("")
+			return
+		}
+		answer("")
+		b.setAndReport(ctx, convOf(msg), msg, "session", parts[1])
 
 	case "pa":
 		msg := q.Message.Message

@@ -362,3 +362,53 @@ func TestUndoRestoresLastTurn(t *testing.T) {
 		t.Error("second undo should have nothing to undo")
 	}
 }
+
+// listingAgent also lists sessions started elsewhere and gives a resume command.
+type listingAgent struct {
+	fakeAgent
+	listed []agent.SessionInfo
+}
+
+func (l *listingAgent) Sessions(context.Context, string, string) ([]agent.SessionInfo, error) {
+	return l.listed, nil
+}
+func (l *listingAgent) ResumeCommand(cwd, id string) string { return "resume " + id + " in " + cwd }
+
+func TestSessionsMergeAndResumeElsewhere(t *testing.T) {
+	la := &listingAgent{listed: []agent.SessionInfo{
+		{ID: "laptop-new", Title: "laptop work", Updated: time.Now().Add(time.Hour)},
+		{ID: "s1", Title: "duplicate of a chat session", Updated: time.Now()},
+	}}
+	home := t.TempDir()
+	st, _ := store.Open(filepath.Join(home, "state.json"))
+	cfg := &config.Config{Home: home, Defaults: config.Defaults{Agent: "fake", Cwd: home, Mode: agent.ModeAsk},
+		Permissions: config.Permissions{Timeout: config.Duration(time.Second)},
+		Agents:      map[string]config.Agent{"fake": {Type: "fake"}}}
+	c := New(Deps{Config: cfg, Agents: map[string]agent.Agent{"fake": la}, Store: st, Tools: fakeTools{}})
+	ui := &fakeUI{approvals: make(chan string, 1), done: make(chan string, 1)}
+	c.SetUI(ui)
+
+	if c.ResumeHint(conv) != "" {
+		t.Error("hint without a session")
+	}
+	c.Submit(conv, text("first")) // records session s1 from the chat
+	waitDone(t, ui)
+
+	got := c.Sessions(context.Background(), conv)
+	if len(got) != 2 || got[0].ID != "laptop-new" || !got[0].Elsewhere || got[1].ID != "s1" || got[1].Elsewhere {
+		t.Fatalf("sessions = %+v", got)
+	}
+	r, err := c.ResumeSession(context.Background(), conv, "laptop-new")
+	if err != nil || !r.Elsewhere {
+		t.Fatalf("resume: %+v %v", r, err)
+	}
+	if s := c.Settings(conv); s.SessionID != "laptop-new" {
+		t.Errorf("session = %q", s.SessionID)
+	}
+	if hint := c.ResumeHint(conv); hint != "resume laptop-new in "+home {
+		t.Errorf("hint = %q", hint)
+	}
+	if _, err := c.ResumeSession(context.Background(), conv, "nope"); err == nil {
+		t.Error("resumed an unknown session")
+	}
+}

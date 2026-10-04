@@ -79,9 +79,10 @@ func (f *fakeAgent) session(id sdk.SessionId) *fakeSession {
 func (f *fakeAgent) Initialize(context.Context, sdk.InitializeRequest) (sdk.InitializeResponse, error) {
 	return sdk.InitializeResponse{ProtocolVersion: sdk.ProtocolVersionNumber, AuthMethods: []sdk.AuthMethod{},
 		AgentCapabilities: sdk.AgentCapabilities{
-			LoadSession:        true,
-			PromptCapabilities: sdk.PromptCapabilities{Image: true},
-			McpCapabilities:    sdk.McpCapabilities{Http: true},
+			LoadSession:         true,
+			PromptCapabilities:  sdk.PromptCapabilities{Image: true},
+			McpCapabilities:     sdk.McpCapabilities{Http: true},
+			SessionCapabilities: sdk.SessionCapabilities{List: &sdk.SessionListCapabilities{}},
 		}}, nil
 }
 
@@ -186,8 +187,20 @@ func (f *fakeAgent) Cancel(context.Context, sdk.CancelNotification) error { retu
 func (f *fakeAgent) CloseSession(context.Context, sdk.CloseSessionRequest) (sdk.CloseSessionResponse, error) {
 	return sdk.CloseSessionResponse{}, nil
 }
-func (f *fakeAgent) ListSessions(context.Context, sdk.ListSessionsRequest) (sdk.ListSessionsResponse, error) {
-	return sdk.ListSessionsResponse{}, nil
+
+// ListSessions reports a session started elsewhere, plus the ones created here.
+func (f *fakeAgent) ListSessions(_ context.Context, req sdk.ListSessionsRequest) (sdk.ListSessionsResponse, error) {
+	cwd := ""
+	if req.Cwd != nil {
+		cwd = *req.Cwd
+	}
+	out := []sdk.SessionInfo{{SessionId: "terminal-1", Cwd: cwd, Title: ptr("started in a terminal"), UpdatedAt: ptr("2026-10-01T10:00:00Z")}}
+	f.mu.Lock()
+	for id := range f.sessions {
+		out = append(out, sdk.SessionInfo{SessionId: sdk.SessionId(id), Cwd: cwd, UpdatedAt: ptr("2026-10-02T10:00:00Z")})
+	}
+	f.mu.Unlock()
+	return sdk.ListSessionsResponse{Sessions: out}, nil
 }
 func (f *fakeAgent) ResumeSession(context.Context, sdk.ResumeSessionRequest) (sdk.ResumeSessionResponse, error) {
 	return sdk.ResumeSessionResponse{}, fmt.Errorf("not supported")
