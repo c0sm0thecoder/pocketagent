@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-04
+
 ### Added
 - Continue sessions from your computer: `/sessions` now also lists the agent's own sessions for the project folder, including ones started in a terminal (marked 💻), and continues them with full context. Supported for Claude Code (from its session logs) and for ACP agents that implement session listing.
 - `/handoff`, and a line in `/status`, give the terminal command to continue the chat's current session on your computer (Claude Code).
@@ -81,7 +83,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Added
 - First release: Telegram frontend, Claude Code adapter, voice transcription, approvals.
 
-[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.7.0...v0.8.0
