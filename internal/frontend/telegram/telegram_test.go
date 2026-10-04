@@ -79,7 +79,9 @@ func (f *fakeAPI) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.ch <- c
 	}
 	var result any = true
-	if method == "getFile" {
+	if method == "createForumTopic" {
+		result = map[string]any{"message_thread_id": 100 + id, "name": params["name"], "icon_color": 0}
+	} else if method == "getFile" {
 		result = map[string]any{"file_id": params["file_id"], "file_path": "files/" + params["file_id"]}
 	} else if strings.HasPrefix(method, "send") || method == "editMessageText" {
 		result = map[string]any{"message_id": id, "date": 0, "chat": map[string]any{"id": 1, "type": "private"}}

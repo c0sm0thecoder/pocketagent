@@ -24,6 +24,7 @@ When the agent wants to run a command or edit a file you get buttons. Reply with
 
 /agent · /model · /mode · /project: switch with one tap
 /project add [name] [path] · /project remove <name>: manage projects
+/topics: in a group with Topics, one topic per project
 /new: fresh session · /sessions: resume a recent one
 /stop: cancel the run and the queue
 /diff: what changed in the last turn (/diff all: since HEAD)
@@ -102,6 +103,9 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.ConvID, m *models.Mes
 		default:
 			b.setAndReport(ctx, conv, nil, "project", arg)
 		}
+
+	case "/topics":
+		b.handleTopics(ctx, conv, m, arg)
 
 	case "/sessions":
 		b.picker(ctx, conv, nil, "session")

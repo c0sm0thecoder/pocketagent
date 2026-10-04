@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- `/topics` creates a forum topic for every project (or the named ones) in a group with Topics, binds each topic to its project and posts a short welcome. Projects that already have a topic are skipped.
+
 ## [0.8.0] - 2026-10-04
 
 ### Added

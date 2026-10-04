@@ -100,3 +100,12 @@ func (c *Core) RemoveProject(name string) error {
 	}
 	return c.Store.RemoveProject(name)
 }
+
+// BoundConversations maps each conversation that has a project to it.
+func (c *Core) BoundConversations() map[ConvID]string {
+	out := map[ConvID]string{}
+	for key, p := range c.Store.ProjectOf() {
+		out[ConvID(key)] = p
+	}
+	return out
+}

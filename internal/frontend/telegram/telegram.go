@@ -67,6 +67,7 @@ var commands = []models.BotCommand{
 	{Command: "mode", Description: "Permission mode: ask, edits, plan, full"},
 	{Command: "project", Description: "Switch project (/project add to register a folder)"},
 	{Command: "cwd", Description: "Show or change working directory"},
+	{Command: "topics", Description: "Create a forum topic per project (groups)"},
 	{Command: "sessions", Description: "Resume a recent session"},
 	{Command: "diff", Description: "Changes since the last message (/diff all: since HEAD)"},
 	{Command: "undo", Description: "Roll back the last turn's file changes"},

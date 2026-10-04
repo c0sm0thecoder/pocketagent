@@ -86,6 +86,7 @@ Then message your bot.
 | `/agent` `/model` `/mode` `/project` | switch with inline buttons (or `/model <name>`) |
 | `/project add [name] [path]` | register an existing folder as a project (defaults: the current folder and its name); the `/project` picker also has a "➕ Add this folder" button |
 | `/project remove <name>` | forget a project added from chat (the folder is untouched) |
+| `/topics [name...]` | in a group with Topics: create a topic per project, each bound to its folder |
 | `/new` | fresh session |
 | `/sessions` | resume a recent session |
 | `/stop` | cancel the run and anything queued |
@@ -97,7 +98,14 @@ Then message your bot.
 
 Any other `/command` is passed to the agent.
 
-**Parallel work:** create a Telegram group, turn on *Topics*, and add your bot. Each topic is its own conversation with its own agent, project and session.
+**Parallel work, one topic per project:**
+
+1. Create a Telegram group with just you and your bot.
+2. In the group's settings, turn on **Topics**.
+3. Make the bot an **admin** with the **Manage Topics** right (admins also see every message, which bots in groups otherwise don't).
+4. Send `/topics` in the group. The bot creates a topic for every project and binds each topic to its folder.
+
+Each topic is its own conversation with its own agent, session, mode and queue, so several agents work on several projects at once, like terminal tabs. `/topics` skips projects that already have a topic; `/topics <name>` creates one for a specific project. The General topic works like a private chat.
 
 ### Permission modes
 

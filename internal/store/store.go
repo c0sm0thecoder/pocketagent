@@ -174,6 +174,19 @@ func (st *Store) Spend(user string) (today, month float64) {
 	return today, month
 }
 
+// ProjectOf returns, for every conversation bound to a project, its project.
+func (st *Store) ProjectOf() map[string]string {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	out := map[string]string{}
+	for key, c := range st.s.Conversations {
+		if c.Project != "" {
+			out[key] = c.Project
+		}
+	}
+	return out
+}
+
 // Projects returns a copy of the projects added from chat.
 func (st *Store) Projects() map[string]Project {
 	st.mu.Lock()

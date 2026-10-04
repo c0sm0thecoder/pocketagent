@@ -63,6 +63,7 @@ type Store interface {
 	AddSpend(user string, usd float64) error
 	Spend(user string) (today, month float64)
 	Projects() map[string]store.Project
+	ProjectOf() map[string]string
 	AddProject(name string, p store.Project) error
 	RemoveProject(name string) error
 }
