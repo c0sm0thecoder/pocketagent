@@ -40,6 +40,6 @@ Security fixes go into the latest release. pocketagent is pre-1.0, so please upg
 Please report privately; don't open a public issue.
 
 - **Preferred:** [open a private security advisory](https://github.com/c0sm0thecoder/pocketagent/security/advisories/new) on GitHub.
-- **Or email:** agazadekamal2004@gmail.com, with "pocketagent security" in the subject.
+- **Or email:** kamalaghzada@gmail.com, with "pocketagent security" in the subject.
 
 Include the version (`pocketagent version`), what an attacker can do, and how to reproduce it. You can expect an acknowledgement within 3 days and an assessment within 7. Fixes are released as soon as they're ready, with a GitHub security advisory crediting you unless you'd rather stay anonymous. Please give us up to 90 days before disclosing publicly.

@@ -6,4 +6,4 @@ In short: be respectful, assume good intent, welcome newcomers, and keep discuss
 
 ## Reporting
 
-Report unacceptable behaviour to the maintainer at agazadekamal2004@gmail.com. Reports are handled confidentially. The maintainer may remove comments, lock threads, or ban participants who break these rules, as described in the Covenant's enforcement guidelines.
+Report unacceptable behaviour to the maintainer at kamalaghzada@gmail.com. Reports are handled confidentially. The maintainer may remove comments, lock threads, or ban participants who break these rules, as described in the Covenant's enforcement guidelines.
