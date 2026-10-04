@@ -31,7 +31,7 @@ func (c *Core) Settings(conv ConvID) Settings {
 		Project: st.Project, SessionID: st.SessionID, Voice: st.Voice,
 		AlwaysAllow: st.AlwaysAllow, TotalCost: st.TotalCost,
 	}
-	if p, ok := c.Config.Projects[st.Project]; ok {
+	if p, ok := c.project(st.Project); ok {
 		s.Cwd, s.Model = p.Cwd, p.Model
 		s.Agent = cmpOr(p.Agent, s.Agent)
 		s.Mode = cmpOr(p.Mode, s.Mode)
@@ -90,7 +90,7 @@ func (c *Core) SetMode(conv ConvID, mode agent.Mode) error {
 }
 
 func (c *Core) SetProject(conv ConvID, name string) error {
-	if _, ok := c.Config.Projects[name]; !ok {
+	if _, ok := c.project(name); !ok {
 		return fmt.Errorf("unknown project %q", name)
 	}
 	c.update(conv, func(s *store.Conversation) {
@@ -100,7 +100,9 @@ func (c *Core) SetProject(conv ConvID, name string) error {
 	return nil
 }
 
-func (c *Core) SetCwd(conv ConvID, dir string) (string, error) {
+// resolveDir turns a user-typed path into an existing absolute directory,
+// relative to the conversation's working directory.
+func (c *Core) resolveDir(conv ConvID, dir string) (string, error) {
 	dir = config.ExpandHome(dir)
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(c.Settings(conv).Cwd, dir)
@@ -108,6 +110,14 @@ func (c *Core) SetCwd(conv ConvID, dir string) (string, error) {
 	dir = filepath.Clean(dir)
 	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() {
 		return "", fmt.Errorf("not a directory: %s", dir)
+	}
+	return dir, nil
+}
+
+func (c *Core) SetCwd(conv ConvID, dir string) (string, error) {
+	dir, err := c.resolveDir(conv, dir)
+	if err != nil {
+		return "", err
 	}
 	// Agents keep sessions per directory, so a new cwd needs a new session.
 	c.update(conv, func(s *store.Conversation) { s.Cwd = dir; resetSession(s) })

@@ -62,6 +62,9 @@ type Store interface {
 	Update(key string, fn func(*store.Conversation)) error
 	AddSpend(user string, usd float64) error
 	Spend(user string) (today, month float64)
+	Projects() map[string]store.Project
+	AddProject(name string, p store.Project) error
+	RemoveProject(name string) error
 }
 
 // ToolHost serves tools (send_file, approval hooks) to agent processes.

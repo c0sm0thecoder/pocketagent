@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -21,6 +23,7 @@ Send text, a voice note, or images (with an optional caption). Each chat, or eac
 When the agent wants to run a command or edit a file you get buttons. Reply with text instead to deny and tell it what to do.
 
 /agent · /model · /mode · /project: switch with one tap
+/project add [name] [path] · /project remove <name>: manage projects
 /new: fresh session · /sessions: resume a recent one
 /stop: cancel the run and the queue
 /diff: what changed in the last turn (/diff all: since HEAD)
@@ -79,15 +82,26 @@ func (b *Bot) handleCommand(ctx context.Context, conv core.ConvID, m *models.Mes
 		b.picker(ctx, conv, nil, "mode")
 
 	case "/project":
-		if len(b.cfg.Projects) == 0 {
-			b.Notice(conv, "No projects configured. Add some under `projects:` in "+b.cfg.Path)
-			return
-		}
-		if arg != "" {
+		sub, rest, _ := strings.Cut(arg, " ")
+		switch sub {
+		case "":
+			b.picker(ctx, conv, nil, "project")
+		case "add":
+			name, dir, _ := strings.Cut(strings.TrimSpace(rest), " ")
+			b.addProject(ctx, conv, nil, name, strings.TrimSpace(dir))
+		case "remove", "rm":
+			if rest == "" {
+				b.Notice(conv, "Usage: /project remove <name>")
+				return
+			}
+			if err := c.RemoveProject(strings.TrimSpace(rest)); err != nil {
+				b.Notice(conv, err.Error())
+				return
+			}
+			b.sendHTML(ctx, conv, "🗑 Removed project <b>"+html.EscapeString(rest)+"</b>. The folder itself is untouched.", nil)
+		default:
 			b.setAndReport(ctx, conv, nil, "project", arg)
-			return
 		}
-		b.picker(ctx, conv, nil, "project")
 
 	case "/sessions":
 		b.picker(ctx, conv, nil, "session")
@@ -219,8 +233,8 @@ func (b *Bot) choices(conv core.ConvID, kind string) (title string, list []choic
 		}
 		return "Permission mode", list, string(s.Mode)
 	case "project":
-		for _, n := range b.cfg.ProjectNames() {
-			list = append(list, choice{n, n})
+		for _, p := range c.Projects() {
+			list = append(list, choice{p.Name + " · " + shortPath(p.Cwd), p.Name})
 		}
 		return "Choose a project", list, s.Project
 	case "session":
@@ -237,11 +251,21 @@ func (b *Bot) choices(conv core.ConvID, kind string) (title string, list []choic
 // the list index; the list is rebuilt on tap.
 func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message, kind string) {
 	title, list, current := b.choices(conv, kind)
-	if len(list) == 0 {
+	var rows [][]models.InlineKeyboardButton
+	// Projects can be added right from the picker: register the folder the
+	// conversation is in, unless it already is a project.
+	if kind == "project" {
+		cwd := b.core.Settings(conv).Cwd
+		if _, ok := b.core.ProjectAt(cwd); !ok {
+			rows = append(rows, []models.InlineKeyboardButton{{
+				Text: "➕ Add this folder (" + filepath.Base(cwd) + ")", CallbackData: "pa|add|0",
+			}})
+		}
+	}
+	if len(list) == 0 && len(rows) == 0 {
 		b.Notice(conv, "Nothing to choose from yet.")
 		return
 	}
-	var rows [][]models.InlineKeyboardButton
 	for i, ch := range list {
 		label := ch.label
 		if ch.value == current {
@@ -253,6 +277,26 @@ func (b *Bot) picker(ctx context.Context, conv core.ConvID, msg *models.Message,
 		rows = append(rows, []models.InlineKeyboardButton{{Text: label, CallbackData: fmt.Sprintf("pk|%s|%d", kind, i)}})
 	}
 	b.editHTML(ctx, conv, msg, "<b>"+html.EscapeString(title)+"</b>", &models.InlineKeyboardMarkup{InlineKeyboard: rows})
+}
+
+// addProject registers an existing folder as a project and reports it,
+// editing msg when the request came from a button.
+func (b *Bot) addProject(ctx context.Context, conv core.ConvID, msg *models.Message, name, dir string) {
+	p, err := b.core.AddProject(conv, name, dir)
+	if err != nil {
+		b.editHTML(ctx, conv, msg, html.EscapeString(err.Error()), nil)
+		return
+	}
+	b.editHTML(ctx, conv, msg, fmt.Sprintf("➕ Added project <b>%s</b> (<code>%s</code>).\nSwitch to it anytime with /project.",
+		html.EscapeString(p.Name), html.EscapeString(shortPath(p.Cwd))), nil)
+}
+
+// shortPath shows paths under the home directory as ~/...
+func shortPath(p string) string {
+	if home, err := os.UserHomeDir(); err == nil && strings.HasPrefix(p, home+string(filepath.Separator)) {
+		return "~" + p[len(home):]
+	}
+	return p
 }
 
 func (b *Bot) setAndReport(ctx context.Context, conv core.ConvID, msg *models.Message, kind, value string) {
@@ -316,6 +360,15 @@ func (b *Bot) handleCallback(ctx context.Context, q *models.CallbackQuery) {
 			return
 		}
 		answer("")
+
+	case "pa":
+		msg := q.Message.Message
+		if msg == nil {
+			answer("")
+			return
+		}
+		answer("")
+		b.addProject(ctx, convOf(msg), msg, "", "")
 
 	case "pk":
 		msg := q.Message.Message

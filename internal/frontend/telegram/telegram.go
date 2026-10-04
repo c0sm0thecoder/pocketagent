@@ -65,7 +65,7 @@ var commands = []models.BotCommand{
 	{Command: "agent", Description: "Switch coding agent"},
 	{Command: "model", Description: "Switch model"},
 	{Command: "mode", Description: "Permission mode: ask, edits, plan, full"},
-	{Command: "project", Description: "Switch project"},
+	{Command: "project", Description: "Switch project (/project add to register a folder)"},
 	{Command: "cwd", Description: "Show or change working directory"},
 	{Command: "sessions", Description: "Resume a recent session"},
 	{Command: "diff", Description: "Changes since the last message (/diff all: since HEAD)"},

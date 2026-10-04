@@ -4,6 +4,10 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- `/project add [name] [path]` registers an existing folder as a project from chat, and the `/project` picker offers "➕ Add this folder". `/project remove <name>` forgets one. Chat-added projects live in the state file; projects in the config file take precedence and can't be removed from chat.
+- The `/project` picker shows each project's folder.
+
 ## [0.7.0] - 2026-10-03
 
 ### Added

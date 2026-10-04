@@ -3,6 +3,8 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
+	"maps"
 	"os"
 	"slices"
 	"sync"
@@ -64,9 +66,17 @@ func (c *Conversation) PushCheckpoint(cp Checkpoint) {
 	}
 }
 
+// Project is a project added from chat. Projects from the config file are
+// not stored here.
+type Project struct {
+	Cwd   string    `json:"cwd"`
+	Added time.Time `json:"added"`
+}
+
 type state struct {
 	Conversations map[string]*Conversation      `json:"conversations"`
 	Spend         map[string]map[string]float64 `json:"spend"` // user id -> day -> USD
+	Projects      map[string]Project            `json:"projects,omitempty"`
 }
 
 type Store struct {
@@ -91,6 +101,9 @@ func Open(path string) (*Store, error) {
 	}
 	if st.s.Spend == nil {
 		st.s.Spend = map[string]map[string]float64{}
+	}
+	if st.s.Projects == nil {
+		st.s.Projects = map[string]Project{}
 	}
 	return st, nil
 }
@@ -159,6 +172,35 @@ func (st *Store) Spend(user string) (today, month float64) {
 		}
 	}
 	return today, month
+}
+
+// Projects returns a copy of the projects added from chat.
+func (st *Store) Projects() map[string]Project {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	return maps.Clone(st.s.Projects)
+}
+
+// AddProject stores a project, failing if the name is taken.
+func (st *Store) AddProject(name string, p Project) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if _, ok := st.s.Projects[name]; ok {
+		return fmt.Errorf("a project named %q already exists", name)
+	}
+	st.s.Projects[name] = p
+	return st.save()
+}
+
+// RemoveProject deletes a stored project, failing if there is none.
+func (st *Store) RemoveProject(name string) error {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if _, ok := st.s.Projects[name]; !ok {
+		return fmt.Errorf("no project named %q was added from chat", name)
+	}
+	delete(st.s.Projects, name)
+	return st.save()
 }
 
 func (st *Store) save() error {

@@ -40,6 +40,20 @@ func buttons(t *testing.T, c call) [][]models.InlineKeyboardButton {
 	return m.InlineKeyboard
 }
 
+// button finds the button whose label starts with prefix.
+func button(t *testing.T, rows [][]models.InlineKeyboardButton, prefix string) models.InlineKeyboardButton {
+	t.Helper()
+	for _, r := range rows {
+		for _, btn := range r {
+			if strings.HasPrefix(btn.Text, prefix) || strings.HasPrefix(btn.Text, "✓ "+prefix) {
+				return btn
+			}
+		}
+	}
+	t.Fatalf("no button %q in %+v", prefix, rows)
+	return models.InlineKeyboardButton{}
+}
+
 func send(b *Bot, text string) { b.handleUpdate(context.Background(), nil, message(owner, 0, text)) }
 
 func TestSimpleCommands(t *testing.T) {
@@ -51,7 +65,6 @@ func TestSimpleCommands(t *testing.T) {
 		{"/stop", "Nothing is running"},
 		{"/cwd", b.cfg.Defaults.Cwd},
 		{"/cwd /no/such/dir", "not a directory"},
-		{"/project", "No projects configured"},
 		{"/diff", "checkpoints are off"},
 		{"/undo", "checkpoints are off"},
 		{"/voice", "voice replies are off"},
@@ -119,7 +132,7 @@ func TestProjectsAndSessions(t *testing.T) {
 
 	send(b, "/project")
 	rows := buttons(t, api.find(t, "sendMessage", "Choose a project"))
-	b.handleUpdate(context.Background(), nil, callback(rows[0][0].CallbackData, 0))
+	b.handleUpdate(context.Background(), nil, callback(button(t, rows, "site · ").CallbackData, 0))
 	api.find(t, "editMessageText", "Project <b>site</b>: beta in")
 
 	send(b, "fix the header")
@@ -263,4 +276,53 @@ func TestAgentErrorIsReported(t *testing.T) {
 	}
 	send(b, "go")
 	api.find(t, "sendMessage", "agent exploded")
+}
+
+func TestProjectAddFromChat(t *testing.T) {
+	b, api, _ := setup(t)
+	ctx := context.Background()
+	dir := t.TempDir()
+	send(b, "/cwd "+dir)
+	api.find(t, "sendMessage", "Now in")
+
+	// With no projects, the picker offers to add the current folder.
+	send(b, "/project")
+	rows := buttons(t, api.find(t, "sendMessage", "Choose a project"))
+	if len(rows) != 1 || !strings.Contains(rows[0][0].Text, "Add this folder ("+filepath.Base(dir)+")") {
+		t.Fatalf("picker = %+v", rows)
+	}
+	b.handleUpdate(ctx, nil, callback(rows[0][0].CallbackData, 0))
+	api.find(t, "editMessageText", "Added project <b>"+filepath.Base(dir)+"</b>")
+
+	// Now it is listed with its path, and the add button is gone.
+	send(b, "/project")
+	rows = buttons(t, api.find(t, "sendMessage", "Choose a project"))
+	if len(rows) != 1 || !strings.Contains(rows[0][0].Text, filepath.Base(dir)+" · ") {
+		t.Fatalf("picker after add = %+v", rows)
+	}
+
+	other := t.TempDir()
+	send(b, "/project add other "+other)
+	api.find(t, "sendMessage", "Added project <b>other</b>")
+	send(b, "/project add other "+other)
+	api.find(t, "sendMessage", "already exists")
+	send(b, "/project other")
+	api.find(t, "sendMessage", "Project <b>other</b>")
+	send(b, "/status")
+	api.find(t, "sendMessage", "Project: other")
+
+	send(b, "/project remove other")
+	api.find(t, "sendMessage", "Removed project <b>other</b>")
+	send(b, "/project remove")
+	api.find(t, "sendMessage", "Usage: /project remove")
+	send(b, "/project add bad/name")
+	api.find(t, "sendMessage", "project names use")
+}
+
+func TestProjectFromConfigCannotBeRemoved(t *testing.T) {
+	b, api, _ := setup(t)
+	b.cfg.Projects = map[string]config.Project{"site": {Cwd: t.TempDir()}}
+	b.cfg.Path = "/home/me/.pocketagent/config.yaml"
+	send(b, "/project remove site")
+	api.find(t, "sendMessage", "defined in /home/me/.pocketagent/config.yaml")
 }

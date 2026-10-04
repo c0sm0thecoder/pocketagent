@@ -84,7 +84,9 @@ agents:
   #   command: [my-agent, --acp]
   #   modes: {edits: [auto-edit], full: [unrestricted]}
 
-# Named workspaces, switchable with /project.
+# Named workspaces, switchable with /project. You can also add existing
+# folders from chat with `/project add`; those are kept in the state file
+# and a project here with the same name takes precedence.
 projects:
   website:
     cwd: ~/projects/website

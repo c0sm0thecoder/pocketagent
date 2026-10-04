@@ -84,6 +84,8 @@ Then message your bot.
 |---|---|
 | text / voice / photo | sent to the agent; captions become the prompt |
 | `/agent` `/model` `/mode` `/project` | switch with inline buttons (or `/model <name>`) |
+| `/project add [name] [path]` | register an existing folder as a project (defaults: the current folder and its name); the `/project` picker also has a "➕ Add this folder" button |
+| `/project remove <name>` | forget a project added from chat (the folder is untouched) |
 | `/new` | fresh session |
 | `/sessions` | resume a recent session |
 | `/stop` | cancel the run and anything queued |
