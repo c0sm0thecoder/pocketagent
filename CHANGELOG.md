@@ -4,6 +4,13 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-10-04
+
+### Fixed
+- In groups, the bot replied "Not authorized" to Telegram's own service messages (for example "topic created", which Telegram posts as the bot), so every new topic got that message. Service messages and messages from bots are now ignored.
+- Strangers in a group are now ignored silently; the "Not authorized" hint with the user id is only sent in private chats.
+- Messages from an admin posting with "Remain anonymous" can't be attributed to a user, so they never run anything; the bot now explains how to fix it instead of staying silent.
+
 ## [0.9.0] - 2026-10-04
 
 ### Added
@@ -69,7 +76,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Added
 - First release: Telegram frontend, Claude Code adapter, voice transcription, approvals.
 
-[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.6.0...v0.7.0

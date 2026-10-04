@@ -215,7 +215,9 @@ func TestTextReplyInForumTopic(t *testing.T) {
 
 func TestUnauthorized(t *testing.T) {
 	b, api, _ := setup(t)
-	b.handleUpdate(context.Background(), nil, message(666, 0, "hi"))
+	m := message(666, 0, "hi")
+	m.Message.Chat.Type = models.ChatTypePrivate // in groups strangers get no reply
+	b.handleUpdate(context.Background(), nil, m)
 	if c := api.wait(t, "sendMessage"); !strings.Contains(c.params["text"], "Not authorized") {
 		t.Errorf("reply = %q", c.params["text"])
 	}

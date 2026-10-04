@@ -82,3 +82,51 @@ func atoi(s string) int {
 	}
 	return n
 }
+
+// Telegram posts "topic created" (and pin) notices as the bot itself. They
+// must not get a reply, and neither must other bots or strangers in groups.
+func TestIgnoresServiceMessagesBotsAndGroupStrangers(t *testing.T) {
+	b, api, _ := setup(t)
+	ctx := context.Background()
+
+	service := forumMessage("")
+	service.Message.From = &models.User{ID: 999, IsBot: true, Username: "pocketagent_bot"}
+	service.Message.ForumTopicCreated = &models.ForumTopicCreated{Name: "api"}
+	b.handleUpdate(ctx, nil, service)
+
+	otherBot := forumMessage("hello")
+	otherBot.Message.From = &models.User{ID: 998, IsBot: true}
+	b.handleUpdate(ctx, nil, otherBot)
+
+	stranger := forumMessage("rm -rf please")
+	stranger.Message.From = &models.User{ID: 666}
+	b.handleUpdate(ctx, nil, stranger)
+
+	// A private message from a stranger still gets the setup hint.
+	private := message(666, 0, "hi")
+	private.Message.Chat.Type = models.ChatTypePrivate
+	b.handleUpdate(ctx, nil, private)
+	c := api.wait(t, "sendMessage")
+	if !strings.Contains(c.params["text"], "Not authorized. Your Telegram user id is 666") {
+		t.Fatalf("first reply was %q: something in the group got a reply", c.params["text"])
+	}
+}
+
+func TestAnonymousAdminGetsAHint(t *testing.T) {
+	b, api, agents := setup(t)
+	ran := make(chan bool, 1)
+	agents["alpha"].run = func(context.Context, agent.Request, agent.Handler) (agent.Result, error) {
+		ran <- true
+		return agent.Result{}, nil
+	}
+	anon := forumMessage("deploy it")
+	anon.Message.From = &models.User{ID: 1087968824, IsBot: true, Username: "GroupAnonymousBot"}
+	anon.Message.SenderChat = &models.Chat{ID: anon.Message.Chat.ID}
+	b.handleUpdate(context.Background(), nil, anon)
+	api.find(t, "sendMessage", "posting anonymously")
+	select {
+	case <-ran:
+		t.Fatal("an anonymous message ran the agent")
+	default:
+	}
+}

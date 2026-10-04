@@ -85,6 +85,12 @@ func (b *Bot) Run(ctx context.Context) {
 	b.tg.Start(ctx)
 }
 
+// hasContent reports whether a message is something the user wrote (as
+// opposed to a service message such as "topic created").
+func hasContent(m *models.Message) bool {
+	return m.Text != "" || m.Caption != "" || m.Voice != nil || m.Audio != nil || len(m.Photo) > 0 || m.Document != nil
+}
+
 func convOf(m *models.Message) core.ConvID {
 	thread := 0
 	if m.IsTopicMessage {
@@ -119,13 +125,25 @@ func (b *Bot) handleUpdate(ctx context.Context, _ *bot.Bot, u *models.Update) {
 		return
 	}
 	m := u.Message
-	if m == nil || m.From == nil {
-		return
+	if m == nil || m.From == nil || !hasContent(m) {
+		return // service messages: topic created, pins, members joining, ...
 	}
 	conv := convOf(m)
-	if !b.allowed(m.From.ID) {
+	private := m.Chat.Type == models.ChatTypePrivate
+	switch {
+	case m.SenderChat != nil && m.SenderChat.ID == m.Chat.ID:
+		// An admin posting with "Remain anonymous": the sender can't be
+		// verified, so nothing runs. Say why, since only admins can do this.
+		log.Printf("ignoring anonymous admin message in chat %d", m.Chat.ID)
+		b.Notice(conv, "You're posting anonymously, so I can't verify it's you. Turn off \"Remain anonymous\" in your admin rights for this group.")
+		return
+	case m.From.IsBot:
+		return // other bots, and our own messages
+	case !b.allowed(m.From.ID):
 		log.Printf("ignoring message from unauthorized user %d (@%s)", m.From.ID, m.From.Username)
-		b.Notice(conv, fmt.Sprintf("Not authorized. Your Telegram user id is %d.", m.From.ID))
+		if private { // in groups, stay silent rather than answer strangers
+			b.Notice(conv, fmt.Sprintf("Not authorized. Your Telegram user id is %d.", m.From.ID))
+		}
 		return
 	}
 
