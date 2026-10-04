@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="470" viewBox="0 0 900 470" role="img" aria-label="A Telegram group with one topic per project: api, web, thesis, infra and mobile, each with its own agent working in parallel.">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F5F3FF"/><stop offset="1" stop-color="#EEF2FF"/></linearGradient>
+<filter id="sh" x="-10%" y="-10%" width="120%" height="130%"><feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#6366F1" flood-opacity="0.16"/></filter></defs>
+<rect width="900" height="470" rx="24" fill="url(#bg)"/>
+<rect x="40" y="40" width="450" height="390" rx="20" fill="#FFFFFF" filter="url(#sh)"/>
+<rect x="60" y="58" width="36" height="36" rx="10" fill="#6366F1"/><path d="M70 70l6 6-6 6M79 84h8" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="108" y="73" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#111827">Workbench</text>
+<text x="108" y="91" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" fill="#6B7280">you, pocketagent · 5 topics</text>
+<line x1="40" y1="112" x2="490" y2="112" stroke="#E5E7EB"/>
+<circle cx="78" cy="143" r="19" fill="#6FB9F0"/>
+<text x="78" y="149" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">A</text>
+<text x="110" y="139" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#111827">api</text>
+<text x="110" y="159" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#10B981">✓ Fixed the auth bug. Tests pass.</text>
+<text x="470" y="139" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">2m</text>
+<line x1="110" y1="175" x2="490" y2="175" stroke="#E5E7EB"/>
+<rect x="40" y="175" width="450" height="63" fill="#EEF2FF"/>
+<circle cx="78" cy="206" r="19" fill="#FF93B2"/>
+<text x="78" y="212" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">W</text>
+<text x="110" y="202" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#111827">web</text>
+<text x="110" y="222" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#F59E0B">Edit src/App.tsx: Allow or Deny?</text>
+<text x="470" y="202" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">now</text>
+<circle cx="462" cy="218" r="10" fill="#6366F1"/><text x="462" y="222" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="12" font-weight="700" fill="#fff">1</text>
+<line x1="110" y1="238" x2="490" y2="238" stroke="#E5E7EB"/>
+<circle cx="78" cy="269" r="19" fill="#8EEE98"/>
+<text x="78" y="275" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">T</text>
+<text x="110" y="265" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#111827">thesis</text>
+<text x="110" y="285" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#374151">Voice: "tighten the related-work section"</text>
+<text x="470" y="265" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">5m</text>
+<line x1="110" y1="301" x2="490" y2="301" stroke="#E5E7EB"/>
+<circle cx="78" cy="332" r="19" fill="#FFD67E"/>
+<text x="78" y="338" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">I</text>
+<text x="110" y="328" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#111827">infra</text>
+<text x="110" y="348" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#374151">Working… Bash: terraform plan</text>
+<text x="470" y="328" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">1m</text>
+<line x1="110" y1="364" x2="490" y2="364" stroke="#E5E7EB"/>
+<circle cx="78" cy="395" r="19" fill="#CB86DB"/>
+<text x="78" y="401" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#fff">M</text>
+<text x="110" y="391" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="15" font-weight="600" fill="#111827">mobile</text>
+<text x="110" y="411" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" fill="#374151">Queued (1 waiting)</text>
+<text x="470" y="391" text-anchor="end" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="11" fill="#6B7280">8m</text>
+<text x="530" y="104" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#111827">One topic</text>
+<text x="530" y="142" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#6366F1">per project.</text>
+<circle cx="537" cy="191" r="5" fill="#6366F1"/>
+<text x="554" y="196" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" fill="#4B5563">Like terminal tabs,</text>
+<text x="554" y="218" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4B5563">in your pocket.</text>
+<circle cx="537" cy="263" r="5" fill="#6366F1"/>
+<text x="554" y="268" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" fill="#4B5563">Every topic has its own</text>
+<text x="554" y="290" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#4B5563">agent, folder and session.</text>
+<circle cx="537" cy="335" r="5" fill="#6366F1"/>
+<text x="554" y="340" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Helvetica, Arial, sans-serif" font-size="16" fill="#4B5563">Set up in one command:</text>
+<text x="554" y="362" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="16" font-weight="700" fill="#6366F1">/topics</text>
+</svg>

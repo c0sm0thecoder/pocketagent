@@ -5,6 +5,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ## [Unreleased]
 
 ### Added
+- Project discovery: `pocketagent init` now has a Projects step that suggests folders from your code directories (`~/projects`, `~/code`, ...) and from where your agents ran recently, and `/topics` with no projects (or the new 🔎 *Find projects* button in `/project`) offers the same suggestions as buttons, including "Add all and create topics". Agent history locations are data (Claude Code and Codex today); folders are de-duplicated by identity, so case-insensitive file systems don't show duplicates, and subfolders fold into their project unless they are their own git repo.
+- `init` ends with the recommended group setup, and `/start` explains it.
+- README: a "Take off in five minutes" section built around the one-topic-per-project workbench.
 - `/topics` creates a forum topic for every project (or the named ones) in a group with Topics, binds each topic to its project and posts a short welcome. Projects that already have a topic are skipped.
 
 ## [0.8.0] - 2026-10-04

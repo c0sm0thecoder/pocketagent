@@ -19,7 +19,7 @@
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quick start</a> ·
+  <a href="#take-off-in-five-minutes">Take off</a> ·
   <a href="#using-it">Using it</a> ·
   <a href="#agents">Agents</a> ·
   <a href="config.example.yaml">Configuration</a> ·
@@ -34,6 +34,41 @@
 
 pocketagent runs on your own machine, next to your code, as one small Go binary. You talk to it through a Telegram bot; it drives the coding agent you choose and brings its questions back to you. Agents, models and speech engines are all pluggable, and nothing is tied to one vendor.
 
+## Take off in five minutes
+
+The recommended setup is a Telegram group with **one topic per project**: like terminal tabs, in your pocket. Each topic has its own agent, folder, session and queue, so several agents work on several projects at once.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/topics-dark.svg">
+  <img src="docs/assets/topics-light.svg" alt="A Telegram group with one topic per project: api, web, thesis, infra and mobile, each with its own agent working in parallel.">
+</picture>
+
+**1. Install** (macOS or Linux; or grab a binary from the [releases page](https://github.com/c0sm0thecoder/pocketagent/releases/latest)):
+
+```sh
+go install github.com/c0sm0thecoder/pocketagent/cmd/pocketagent@latest
+```
+
+You also need at least one coding agent installed and logged in. For local voice transcription, install whisper.cpp and ffmpeg.
+
+**2. Set up and start:**
+
+```sh
+pocketagent init      # bot token, your account, your agents, and your projects
+pocketagent start     # or: pocketagent service install, to start at login
+```
+
+`init` asks for a bot token (message [@BotFather](https://t.me/BotFather), send `/newbot`), locks the bot to your Telegram account, detects your agents, and **finds your projects for you**: folders where your agents ran recently and the folders in `~/projects`, `~/code` and similar. Tick the ones you want.
+
+**3. Create your workbench group** in Telegram:
+
+1. New group with just you and your bot.
+2. Group settings → **Topics** → on.
+3. Make the bot an **admin** with **Manage Topics**.
+4. Send **`/topics`**.
+
+The bot creates a topic for every project and binds each to its folder. Add projects later (`/project add`, or the 🔎 *Find projects* button in `/project`) and send `/topics` again; it only creates the missing ones. Prefer a single chat? Just message the bot directly and switch projects with `/project`.
+
 ## Features
 
 - **Any agent.** Every agent that speaks the [Agent Client Protocol](https://agentclientprotocol.com) works out of the box (Codex, Copilot, Cursor, Gemini, Goose, Kiro, OpenCode and others). Any other CLI works through a command template, and Claude Code also has a dedicated adapter.
@@ -41,42 +76,14 @@ pocketagent runs on your own machine, next to your code, as one small Go binary.
 - **Voice in and out.** Transcribe locally with whisper.cpp, through any OpenAI-compatible HTTP endpoint (hosted or self-hosted), or with your own command. `/voice` reads replies back.
 - **Images.** Send screenshots, photos or albums. Agents can send files and images back.
 - **Approvals with one tap.** Allow, Always allow, or Deny. Or reply with text to deny and say what to do instead. Four modes: `ask`, `edits`, `plan`, `full`.
-- **One session per chat or forum topic.** Run several agents on several projects in parallel, one topic each.
+- **One topic per project.** `/topics` turns a Telegram group into a workbench: a topic per project, each with its own agent, folder and session, all working in parallel.
+- **Finds your projects.** `init` and the 🔎 *Find projects* button suggest folders from your code directories and from where your agents ran recently.
 - **Switch with a tap.** `/agent`, `/model`, `/mode`, `/project` and `/sessions` show inline pickers.
 - **Undo.** Every turn takes a git snapshot without touching your branch, index or stash. `/diff` shows what changed, and `/undo` rolls it back.
 - **Queue.** Keep sending messages while the agent works; they run in order.
 - **Budgets.** A daily spend cap per user, for agents that report cost.
 - **Sandboxing.** Wrap any agent in a container ([docs/sandbox.md](docs/sandbox.md)).
 - **Runs itself.** `init` sets everything up, `doctor` checks it, and `service install` keeps it running.
-
-## Quick start
-
-**1. Install** (macOS or Linux):
-
-```sh
-go install github.com/c0sm0thecoder/pocketagent/cmd/pocketagent@latest
-```
-
-or download a binary from the [releases page](https://github.com/c0sm0thecoder/pocketagent/releases/latest), or run the [container image](#running-on-a-server).
-
-You also need at least one coding agent installed and logged in. For local voice transcription, install whisper.cpp and ffmpeg.
-
-**2. Set up:**
-
-```sh
-pocketagent init
-```
-
-It asks for a bot token (message [@BotFather](https://t.me/BotFather) and send `/newbot`), then waits for you to message your new bot so it can lock the bot to your account. It then detects the agents you have installed and sets up voice.
-
-**3. Run:**
-
-```sh
-pocketagent start             # in the background
-pocketagent service install   # or: start at login, restart on crashes
-```
-
-Then message your bot.
 
 ## Using it
 
@@ -98,14 +105,7 @@ Then message your bot.
 
 Any other `/command` is passed to the agent.
 
-**Parallel work, one topic per project:**
-
-1. Create a Telegram group with just you and your bot.
-2. In the group's settings, turn on **Topics**.
-3. Make the bot an **admin** with the **Manage Topics** right (admins also see every message, which bots in groups otherwise don't).
-4. Send `/topics` in the group. The bot creates a topic for every project and binds each topic to its folder.
-
-Each topic is its own conversation with its own agent, session, mode and queue, so several agents work on several projects at once, like terminal tabs. `/topics` skips projects that already have a topic; `/topics <name>` creates one for a specific project. The General topic works like a private chat.
+**Parallel work:** see [the group setup](#take-off-in-five-minutes). In a group, every topic is a separate conversation; the General topic works like a private chat.
 
 ### Permission modes
 
