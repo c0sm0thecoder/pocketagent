@@ -4,6 +4,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-04
+
 ### Added
 - `/project add [name] [path]` registers an existing folder as a project from chat, and the `/project` picker offers "➕ Add this folder". `/project remove <name>` forgets one. Chat-added projects live in the state file; projects in the config file take precedence and can't be removed from chat.
 - The `/project` picker shows each project's folder.
@@ -59,7 +61,8 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 ### Added
 - First release: Telegram frontend, Claude Code adapter, voice transcription, approvals.
 
-[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/c0sm0thecoder/pocketagent/compare/v0.5.0...v0.5.1
