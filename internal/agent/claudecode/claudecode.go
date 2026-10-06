@@ -56,6 +56,8 @@ func (a *Agent) Tools() []agent.Tool {
 	return []agent.Tool{{
 		Name:        approvalTool,
 		Description: "Internal: asks the user to approve a tool call. Do not call directly.",
+		// Only asks the user; the tool call it guards is what acts.
+		Hints: agent.ToolHints{Title: "Ask the user to approve a tool call", ReadOnly: true},
 		Schema: map[string]any{"type": "object", "properties": map[string]any{
 			"tool_name": map[string]any{"type": "string"},
 			"input":     map[string]any{"type": "object"},

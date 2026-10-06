@@ -87,11 +87,23 @@ func Start(host string, shared ...agent.Tool) (*Bridge, error) {
 func (b *Bridge) AddAgent(name string, extra []agent.Tool) {
 	s := mcp.NewServer(&mcp.Implementation{Name: Name, Version: "1"}, nil)
 	for _, t := range append(append([]agent.Tool{}, b.shared...), extra...) {
-		s.AddTool(&mcp.Tool{Name: t.Name, Description: t.Description, InputSchema: t.Schema}, b.call(t))
+		s.AddTool(&mcp.Tool{Name: t.Name, Description: t.Description, InputSchema: t.Schema, Annotations: annotations(t.Hints)}, b.call(t))
 	}
 	b.mu.Lock()
 	b.servers[name] = s
 	b.mu.Unlock()
+}
+
+// annotations states every hint explicitly: MCP's defaults for unset hints
+// are the cautious ones (destructive, open world), which would be wrong.
+func annotations(h agent.ToolHints) *mcp.ToolAnnotations {
+	return &mcp.ToolAnnotations{
+		Title:           h.Title,
+		ReadOnlyHint:    h.ReadOnly,
+		DestructiveHint: &h.Destructive,
+		IdempotentHint:  h.Idempotent,
+		OpenWorldHint:   &h.OpenWorld,
+	}
 }
 
 func (b *Bridge) serverFor(r *http.Request) *mcp.Server {

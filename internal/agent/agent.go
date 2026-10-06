@@ -58,7 +58,19 @@ type Tool struct {
 	Name        string
 	Description string
 	Schema      map[string]any // JSON Schema of the arguments
+	Hints       ToolHints
 	Call        func(ctx context.Context, h Handler, args json.RawMessage) (string, error)
+}
+
+// ToolHints describe a tool's behaviour so clients can decide what needs
+// confirmation. They follow MCP's tool annotations and are always sent in
+// full; Destructive and Idempotent only matter when ReadOnly is false.
+type ToolHints struct {
+	Title       string
+	ReadOnly    bool // doesn't change its environment
+	Destructive bool // may delete or overwrite things
+	Idempotent  bool // repeating a call with the same arguments has no further effect
+	OpenWorld   bool // reaches outside the machine (network, other people)
 }
 
 // Factory builds an Agent from its configuration.

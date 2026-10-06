@@ -4,6 +4,9 @@ All notable changes are listed here. The format follows [Keep a Changelog](https
 
 ## [Unreleased]
 
+### Added
+- MCP tool annotations: every tool pocketagent serves to agents states its behaviour (`send_file` changes nothing locally but reaches outside the machine; Claude Code's approval hook is read-only), so clients can decide what needs confirmation. All hints are sent explicitly rather than left to MCP's cautious defaults.
+
 ## [0.10.0] - 2026-10-04
 
 ### Added

@@ -193,3 +193,10 @@ func TestDescribe(t *testing.T) {
 		t.Errorf("bash: %q / %q", long.Title, long.Detail[:10])
 	}
 }
+
+func TestApprovalToolHints(t *testing.T) {
+	tool := fake(t).(agent.ToolProvider).Tools()[0]
+	if h := tool.Hints; h.Title == "" || !h.ReadOnly || h.Destructive || h.OpenWorld {
+		t.Errorf("hints = %+v", h)
+	}
+}

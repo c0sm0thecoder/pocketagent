@@ -124,3 +124,35 @@ func TestRejectsMissingToken(t *testing.T) {
 		t.Errorf("status = %d", resp.StatusCode)
 	}
 }
+
+// Every tool advertises all its behaviour hints, so clients never fall back
+// to MCP's defaults (which assume destructive and open world).
+func TestToolsAdvertiseHints(t *testing.T) {
+	b, err := Start("", SendFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	approve := agent.Tool{Name: "approve", Schema: map[string]any{"type": "object"},
+		Hints: agent.ToolHints{Title: "Approve", ReadOnly: true}, Call: SendFile.Call}
+	b.AddAgent("a", []agent.Tool{approve})
+	res, err := connect(t, b.Server("a", "c")).ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range res.Tools {
+		a := tool.Annotations
+		if a == nil || a.Title == "" || a.DestructiveHint == nil || a.OpenWorldHint == nil {
+			t.Fatalf("%s: incomplete annotations %+v", tool.Name, a)
+		}
+		switch tool.Name {
+		case "send_file":
+			if a.ReadOnlyHint || *a.DestructiveHint || a.IdempotentHint || !*a.OpenWorldHint {
+				t.Errorf("send_file hints = %+v", a)
+			}
+		case "approve":
+			if !a.ReadOnlyHint || *a.DestructiveHint || *a.OpenWorldHint {
+				t.Errorf("approve hints = %+v", a)
+			}
+		}
+	}
+}

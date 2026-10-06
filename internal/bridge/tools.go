@@ -15,6 +15,9 @@ var SendFile = agent.Tool{
 	Description: "Send a file from this machine to the user's chat. Images (png/jpg/gif/webp) " +
 		"are shown inline; anything else is sent as a document. Use it when the user asks to " +
 		"see a screenshot, chart, image or file.",
+	// Sends to the user's chat: changes nothing locally, but leaves the
+	// machine, and sending twice sends two messages.
+	Hints: agent.ToolHints{Title: "Send a file to the chat", OpenWorld: true},
 	Schema: map[string]any{
 		"type":     "object",
 		"required": []string{"path"},
