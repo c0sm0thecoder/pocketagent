@@ -1,7 +1,7 @@
 # pocketagent with agents preinstalled, for running on a server.
 # See "Running on a server" in the README.
 
-FROM golang:1.26@sha256:0f063af2d465d8dcae54cce04278ada488b96f77b42449c8d071e47d016cc65a AS build
+FROM golang:1.26@sha256:37cfcca63222ec499bec5e8ad7aad52dbf7529db36d5812b8eae2f0621aa92d6 AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
