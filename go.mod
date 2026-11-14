@@ -6,9 +6,9 @@ toolchain go1.26.8
 
 require (
 	github.com/coder/acp-go-sdk v0.13.5
-	github.com/go-telegram/bot v1.27.0
+	github.com/go-telegram/bot v1.28.0
 	github.com/modelcontextprotocol/go-sdk v1.8.0
-	go.yaml.in/yaml/v3 v3.0.5
+	go.yaml.in/yaml/v3 v3.0.6
 )
 
 require (
